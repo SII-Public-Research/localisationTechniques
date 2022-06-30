@@ -14,7 +14,7 @@ fn main() {
 
     loop {
         println!("\nNew measure");
-        uwbsensor = match rtt_ss_responder(uwbsensor, Timeout::none()) {
+        uwbsensor = match rtt_ss_responder(uwbsensor, OptionTimeout::None) {
             Ok(sensor) => {
                 println!("OK");
                 io::stdout().flush().unwrap();

@@ -14,6 +14,9 @@ use embedded_hal::{
 };
 use embedded_timeout_macros::block_timeout;
 
+use rppal::hal::Timer;
+use std::time::Duration;
+
 
 // ajouter une decription de ce qu'est PanId et ShortAddress
 pub const PAN_ID : dw3000::mac::PanId = dw3000::mac::PanId(0x111);
@@ -29,35 +32,28 @@ pub const ADD_ANCHOR3: dw3000::mac::Address = dw3000::mac::Address::Short(dw3000
 pub const ADD_ERROR: dw3000::mac::Address = dw3000::mac::Address::Short(dw3000::mac::PanId(0x0), dw3000::mac::ShortAddress(0x0));
 
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub struct Timeout<TIM, X>
-where
-    TIM: CountDown,
-    X: Into<TIM::Time> + Copy,
+#[derive(Copy, Clone, Debug)]
+pub struct Timeout
 {
-    pub timer: Option<TIM>,
-    pub count: Option<X>,
+    pub timer: Timer,
+    pub count: Duration,
 }
 
-impl<TIM, X> Timeout<TIM, X>
-where
-    TIM: CountDown,
-    X: Into<TIM::Time> + Copy,
+impl Timeout
 {
-    pub fn new(timer: TIM, count: X) -> Self {
-        Timeout { 
-            timer: Some(timer), 
-            count: Some(count),
-        }
-    }
-    pub fn none() -> Self {
-        Timeout { 
-            timer: None, 
-            count: None,
+    pub fn new(count: u64) -> Self {
+        Timeout {
+            timer: Timer::new(),
+            count: Duration::from_millis(count),
         }
     }
 }
 
+pub enum OptionTimeout
+{
+    Some(Timeout),
+    None,
+}
 
 #[derive(Copy, Clone, Debug)]
 pub struct UwbRData {
@@ -111,14 +107,11 @@ where
     CS: OutputPin,
 {
     ///////// FONCTION BASIQUE DE RECEPTION /////////
-    pub fn uwb_receive<TIM, X>(
+    pub fn uwb_receive(
         mut self,
-        timeout: Timeout<TIM, X>,
+        timeout: OptionTimeout,
         uwb_data_r: &mut UwbRData,
     ) -> Result<Self, (Self, Error<SPI, CS>)>
-    where
-        TIM: CountDown,
-        X: Into<TIM::Time> + Copy,
     {
         let mut receiving = ok_or_panic(
             self.dw3000.receive(Config::default()),
@@ -126,10 +119,10 @@ where
         );
 
         let mut buffer = [0; 1024]; // buffer to receive message
-        let result = match (timeout.timer, timeout.count) {
-            (Some(mut n), Some(c)) => {                                   // With timeout
-                n.start(c);
-                match block_timeout!(&mut n, receiving.r_wait(&mut buffer)) {
+        let result = match timeout {
+            OptionTimeout::Some(mut timeout) => {   
+                timeout.timer.start(timeout.count);                                                     // With timeout
+                match block_timeout!(&mut timeout.timer, receiving.r_wait(&mut buffer)) {
                     Ok(t) => t,
                     Err(e) => {
                         self.dw3000 = ok_or_panic(
@@ -140,7 +133,7 @@ where
                     }
                 }
             }
-            _ => {                                                                   // Without timeout
+            OptionTimeout::None => {                                                                   // Without timeout
                 match block!(receiving.r_wait(&mut buffer)) {                          
                     Ok(t) => t,
                     Err(e) => {
@@ -287,15 +280,13 @@ where
 /************      FONCTION - SIMPLE SIDED    ********** */
 /******************************************************* */
 
-pub fn rtt_ss_inititor <TIM, X, SPI, CS>(
+pub fn rtt_ss_inititor <SPI, CS>(
     mut sensor: UWBSensor<SPI, CS, Ready>,
-    timeout: Timeout<TIM, X>,
+    timeout: OptionTimeout,
 ) -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)>
 where
     SPI: Transfer<u8> + Write<u8>,
     CS: OutputPin,
-    TIM: CountDown + Copy,
-    X: Into<TIM::Time> + Copy,
 {
 
     // SENDING FIRST MESSAGE
@@ -327,15 +318,13 @@ where
     Ok(sensor)
 }
 
-pub fn rtt_ss_responder <TIM, X, SPI, CS>(
+pub fn rtt_ss_responder <SPI, CS>(
     mut sensor: UWBSensor<SPI, CS, Ready>,
-    timeout: Timeout<TIM, X>,
+    timeout: OptionTimeout,
 ) -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)>
 where
     SPI: Transfer<u8> + Write<u8>,
     CS: OutputPin,
-    TIM: CountDown + Copy,
-    X: Into<TIM::Time> + Copy,
 {
     // RECEIVING THE FIRST MESSAGE
     println!("STEP 1 : Waiting ping...");

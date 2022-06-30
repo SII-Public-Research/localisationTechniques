@@ -1,6 +1,5 @@
 
 use rppal::gpio::{Gpio, OutputPin};
-use rppal::hal::Timer;
 use rppal::spi::{Bus, Mode, SlaveSelect, Spi};
 
 use std::io::{self, Write};
@@ -34,7 +33,6 @@ async fn main()  {
     let mut uwbsensor = init();
 
     loop {
-        let _timer = Timer::new();
         let nb_measure: u32;
         let mut nb_current_measure = 0;
 
@@ -45,7 +43,7 @@ async fn main()  {
 
         while nb_current_measure < nb_measure {
             println!("\nNew measure");
-            uwbsensor = match rtt_ss_inititor(uwbsensor, Timeout::new(_timer, Duration::from_millis(500))) {
+            uwbsensor = match rtt_ss_inititor(uwbsensor, OptionTimeout::Some(Timeout::new(500))) {
                 Ok(sensor) => {
                     println!("OK");
                     println!("Distance = {}", sensor.distance);

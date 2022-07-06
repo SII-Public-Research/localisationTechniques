@@ -1,6 +1,7 @@
 pub mod error;
 pub mod experiment_file;
-pub mod uwb_sensor;
+pub mod uwb_basics;
+pub mod rtt;
 pub mod tools;
 
 pub fn ok_or_panic<T, E>(result: Result<T, E>, panic_info: &str) -> T {

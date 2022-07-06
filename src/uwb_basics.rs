@@ -1,4 +1,3 @@
-//use embedded_hal::{spi::FullDuplex, digital::v2::OutputPin};    A MODIFIER DANS LE DRIVER CAR LA FONCTION NEW ATTEND UN BLOCKING SPI
 use crate::{error::Error, tools::*, *};
 use dw3000::{
     block,
@@ -14,8 +13,6 @@ use embedded_hal::{
 };
 use embedded_timeout_macros::block_timeout;
 
-use rppal::hal::Timer;
-use std::time::Duration;
 
 
 // ajouter une decription de ce qu'est PanId et ShortAddress
@@ -31,30 +28,7 @@ pub const ADD_ANCHOR3: dw3000::mac::Address = dw3000::mac::Address::Short(dw3000
 
 pub const ADD_ERROR: dw3000::mac::Address = dw3000::mac::Address::Short(dw3000::mac::PanId(0x0), dw3000::mac::ShortAddress(0x0));
 
-
-#[derive(Copy, Clone, Debug)]
-pub struct Timeout
-{
-    pub timer: Timer,
-    pub count: Duration,
-}
-
-impl Timeout
-{
-    pub fn new(count: u64) -> Self {
-        Timeout {
-            timer: Timer::new(),
-            count: Duration::from_millis(count),
-        }
-    }
-}
-
-pub enum OptionTimeout
-{
-    Some(Timeout),
-    None,
-}
-
+// Structure to store specifics data from the Message received (See Message<'l> struct on DW3000 crate)
 #[derive(Copy, Clone, Debug)]
 pub struct UwbRData {
     pub addr_sender: Option<dw3000::mac::Address>,
@@ -88,7 +62,7 @@ where
             dw3000: DW3000::new(spi, cs).init()?.config(Config::default())?,
             connection: false,
             timing_data: [0; 10],
-            distance: 1000000000000.0,
+            distance: -1,
             addr_dest: dw3000::mac::ShortAddress(0x0),
             id: 0,
             ant_delay_tx: 16500,
@@ -106,7 +80,7 @@ where
     SPI: Transfer<u8> + Write<u8>,
     CS: OutputPin,
 {
-    ///////// FONCTION BASIQUE DE RECEPTION /////////
+    // Basic function to wait for a reception. To be used with or without a Timeout (no timeout = wait forever)
     pub fn uwb_receive(
         mut self,
         timeout: OptionTimeout,
@@ -152,7 +126,7 @@ where
             "error when finish receiving, reset must be needed !",
         );
 
-        uwb_data_r.addr_sender = result.frame.header.source;        // Stocke l'addresse du module ayant envoyé la trame de donner pour pouvoir vérifier qu'il ne s'agit pas d'un message d'un module inconnu
+        uwb_data_r.addr_sender = result.frame.header.source;        // Stocke l'addresse du module ayant envoyé la trame de données pour pouvoir vérifier qu'il ne s'agit pas d'un message d'un module inconnu
         uwb_data_r.r_time = result.rx_time.value();                 // Stocke la valeur du timer lorsque la trame de données a été reçue
         
         let mut nb_data = 0;
@@ -165,7 +139,7 @@ where
     }
 
 
-    ///////// FONCTION BASIQUE D'ENVOI /////////
+    // Basic function to send a message. To be used with or without a Delay (no timeout = wait forever)
     pub fn uwb_send(
         mut self, 
         buffer: &[u8],
@@ -221,6 +195,21 @@ where
 }
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ///////////   FONCTION DOUBLE SIDED TARGET WITH 3 ANCHORS /////////////
 
 pub fn calc_delay_send <SPI, CS> (mut sensor: UWBSensor<SPI, CS, Ready>, delay: &mut u64) 
@@ -242,24 +231,6 @@ where
 
     Ok(sensor)
 } 
-
-// pas utilisé ici
-// pub fn check_bouclage<SPI, CS> (mut sensor: UWBSensor<SPI, CS, Ready>) 
-//     -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)> 
-// where
-//     SPI: Transfer<u8> + Write<u8>,
-//     CS: OutputPin,
-// {
-//     for i in 1..6 {
-//         if sensor.timing_data[i] < sensor.timing_data[i-1] {
-//             println!("t[i-1] = {}; t[i] = {}", sensor.timing_data[i-1], sensor.timing_data[i] );
-//             sensor.timing_data[i] = sensor.timing_data[i] + 1099511627776;  // + 2^40 
-//             println!(" t[i] = {}", sensor.timing_data[i]);
-//         }
-//     }
-
-//     Ok(sensor)
-// }
 
 pub fn send_erreur<SPI,CS>(mut sensor:UWBSensor<SPI,CS,Ready>)
  -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)> 
@@ -399,21 +370,5 @@ where
         sensor.distance = sensor.distance;
     }
     
-    Ok(sensor)
-}
-
-
-pub fn filtre_iir<SPI, CS>(
-    mut sensor: UWBSensor<SPI, CS, Ready>,
-) -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)>
-where
-    SPI: Transfer<u8> + Write<u8>,
-    CS: OutputPin,
-{
-
-    let a: f64 = 0.96;
-    let distance_filtre: f64 = ((1.0 - a) * sensor.distance) + (a * sensor.previous_distance_filtre);
-    sensor.previous_distance_filtre=distance_filtre;
-    sensor.distance_filtre=distance_filtre;
     Ok(sensor)
 }

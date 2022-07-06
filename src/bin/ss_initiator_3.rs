@@ -34,7 +34,7 @@ async fn main() {
     println!("File is created and ready for the experimentation");
  
     
-    let (mut uwbsensor1, mut uwbsensor2, mut uwbsensor3) = init();
+    let (mut uwbsensor1, mut uwbsensor2, mut uwbsensor3) = init_3();
     loop {
         let _timer = Timer::new();
         let nb_measure: u32;
@@ -112,9 +112,8 @@ async fn main() {
 }
 
 
-fn init() -> (UWBSensor<Spi, OutputPin, hl::Ready>, UWBSensor<Spi, OutputPin, hl::Ready>, UWBSensor<Spi, OutputPin, hl::Ready>) 
+pub fn init_3() -> (UWBSensor<Spi, OutputPin, hl::Ready>, UWBSensor<Spi, OutputPin, hl::Ready>, UWBSensor<Spi, OutputPin, hl::Ready>) 
 {
-
     /******************************************************* */
 	/************        BASIC CONFIGURATION      ********** */
 	/******************************************************* */
@@ -143,8 +142,6 @@ fn init() -> (UWBSensor<Spi, OutputPin, hl::Ready>, UWBSensor<Spi, OutputPin, hl
 
     thread::sleep(Duration::from_millis(500));
 
-
-
     // create an UWBSensor
     let mut uwbsensor1 = ok_or_panic(UWBSensor::new(spi1, cs0),"Failed to create an UWBSensor object");
     let mut uwbsensor2 = ok_or_panic(UWBSensor::new(spi2, cs1),"Failed to create an UWBSensor object");
@@ -158,29 +155,7 @@ fn init() -> (UWBSensor<Spi, OutputPin, hl::Ready>, UWBSensor<Spi, OutputPin, hl
     uwbsensor2.dw3000.set_address(PAN_ID, ADD_S_ANCH2).expect("Erreur set adress");
     uwbsensor3.dw3000.set_address(PAN_ID, ADD_S_ANCH3).expect("Erreur set adress");
 
-    // Delais trouvés par tatonement avec le simple, à affiner pour avoir une précision au cm pret
-    // uwbsensor1.dw3000.set_antenna_delay(4416, 16500).expect("Failed set antenna delay.");
-    // uwbsensor2.dw3000.set_antenna_delay(4416, 16500).expect("Failed set antenna delay.");
-    // uwbsensor3.dw3000.set_antenna_delay(4416, 16500).expect("Failed set antenna delay.");
-
     println!("Init OK");
-
 
     return (uwbsensor1, uwbsensor2, uwbsensor3)
 }
-
-
-// fn reset(mut uwbsensor: UWBSensor<Spi, OutputPin, hl::Ready>) -> UWBSensor<Spi, OutputPin, hl::Ready> {
-//     uwbsensor.dw3000.ll().sys_status().modify(|_, w| {
-//         w.rxfto(1)
-//             .rxpto(1)
-//             .rxphe(1)
-//             .rxfce(1)
-//             .rxfsl(1)
-//             .rxsto(1)
-//             .arfe(1)
-//             .ciaerr(1)
-//     }).expect("Erreur reset module");
-
-//     uwbsensor
-// }

@@ -144,7 +144,7 @@ where
         mut self, 
         buffer: &[u8],
         delay: Option<u64>,
-    ) -> Result<UWBSensor<SPI, CS, Ready>, (Self, Error<SPI, CS>)> 
+    ) -> Result<UWBSensor<SPI, CS, Ready>, (Self, Error<SPI, CS>)>
     {
         let mut sending = match delay {
             Some(n) => { 
@@ -197,21 +197,6 @@ where
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-///////////   FONCTION DOUBLE SIDED TARGET WITH 3 ANCHORS /////////////
-
 pub fn calc_delay_send <SPI, CS> (mut sensor: UWBSensor<SPI, CS, Ready>, delay: &mut u64) 
     -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)> 
 where
@@ -232,6 +217,7 @@ where
     Ok(sensor)
 } 
 
+
 pub fn send_erreur<SPI,CS>(mut sensor:UWBSensor<SPI,CS,Ready>)
  -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)> 
 where
@@ -245,83 +231,6 @@ where
     Ok(sensor)
 }
 
-
-
-/******************************************************* */
-/************      FONCTION - SIMPLE SIDED    ********** */
-/******************************************************* */
-
-pub fn rtt_ss_inititor <SPI, CS>(
-    mut sensor: UWBSensor<SPI, CS, Ready>,
-    timeout: OptionTimeout,
-) -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)>
-where
-    SPI: Transfer<u8> + Write<u8>,
-    CS: OutputPin,
-{
-
-    // SENDING FIRST MESSAGE
-    println!("STEP 1 : Sending ping...");
-
-    let buffer = [0; 25];
-    sensor = sensor.uwb_send(&buffer, None)?; // ???? gestion des erreur
-
-
-    // RECEIVING T2 AND T3
-    println!("STEP 2 : Waiting for an answer...");
-
-    let mut uwb_data_r = UwbRData {
-        addr_sender: Some(dw3000::mac::Address::Short(dw3000::mac::PanId(0x111), dw3000::mac::ShortAddress(0x0))),
-        data: [0; 6],
-        r_time: 0,
-    };
-
-    sensor = sensor.uwb_receive(timeout, &mut uwb_data_r)?; // ???? gestion des erreur
-    sensor.timing_data[1] = uwb_data_r.data[0];     // Stocke T2
-    sensor.timing_data[2] = uwb_data_r.data[1];     // Stocke T3
-    sensor.timing_data[3] = uwb_data_r.r_time;      // Stocke T4
-    
-
-    // Distance calculation
-    println!("STEP 3 : Distance calculation...");
-
-    sensor = calc_distance_simple(sensor)?;         // Calcule de la distance en m
-    Ok(sensor)
-}
-
-pub fn rtt_ss_responder <SPI, CS>(
-    mut sensor: UWBSensor<SPI, CS, Ready>,
-    timeout: OptionTimeout,
-) -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)>
-where
-    SPI: Transfer<u8> + Write<u8>,
-    CS: OutputPin,
-{
-    // RECEIVING THE FIRST MESSAGE
-    println!("STEP 1 : Waiting ping...");
-
-    let mut uwb_data_r = UwbRData {
-        addr_sender: Some(dw3000::mac::Address::Short(dw3000::mac::PanId(0x111), dw3000::mac::ShortAddress(0x0))),
-        data: [0; 6],
-        r_time: 0,
-    };
-
-    sensor = sensor.uwb_receive(timeout, &mut uwb_data_r)?; // ???? gestion des erreur
-    sensor.timing_data[0] = uwb_data_r.r_time;   // T2
-
-    // CALCULATE SENDING DELAY 
-    let delay_rx_tx = sensor.timing_data[0] + (10000 * 63898) as u64;
-    sensor.timing_data[1] = ((delay_rx_tx >> 9) << 9) + sensor.ant_delay_tx ;  // T3
-
-    // SENDING T2 AND T3
-    println!("STEP 2 : Offset response...");
-    
-    let mut buffer: [u8; 25] = [0; 25];
-    convert_u64_u8(&sensor.timing_data, &mut buffer);
-    sensor = sensor.uwb_send(&buffer, Some(delay_rx_tx))?; // ???? gestion des erreur
-
-    Ok(sensor)
-}
 
 pub fn calc_distance_simple <SPI, CS> (mut sensor: UWBSensor<SPI, CS, Ready>) 
     -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)> 
@@ -370,5 +279,21 @@ where
         sensor.distance = sensor.distance;
     }
     
+    Ok(sensor)
+}
+
+
+// IIR filtre, to be used on the distances measured by UWBSensor
+pub fn filtre_iir<SPI, CS>(
+    mut sensor: UWBSensor<SPI, CS, Ready>,
+) -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)>
+where
+    SPI: Transfer<u8> + Write<u8>,
+    CS: OutputPin,
+{
+    let a: f64 = 0.96;
+    let distance_filtre: f64 = ((1.0 - a) * sensor.distance) + (a * sensor.previous_distance_filtre);
+    sensor.previous_distance_filtre = distance_filtre;
+    sensor.distance_filtre = distance_filtre;
     Ok(sensor)
 }

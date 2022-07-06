@@ -45,103 +45,20 @@ fn main() {
     block_on(async_main());
 }
 
-pub fn rtt_ds_responder<TIM, X, SPI, CS>(
-    mut sensor: UWBSensor<SPI, CS, Ready>,
-    timer: Option<Timeout<TIM, X>>,
-    ant_delay: u64,
-) -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)>
-where
-    SPI: Transfer<u8> + Write<u8>,
-    CS: OutputPin,
-    TIM: CountDown + Copy,
-    X: Into<TIM::Time> + Copy,
+
+pub fn init() -> UWBSensor<Spi, OutputPin, Ready> 
 {
-    sensor.id = 5;
 
-    let mut data_anch1 = UwbRData {
-        addr_sender: Some(dw3000::mac::Address::Short(
-            dw3000::mac::PanId(0x111),
-            dw3000::mac::ShortAddress(0x0),
-        )),
-        data: [0; 6],
-        r_time: 0,
-    };
-
-    println!("STEP 1 : Waiting ping...");
-    sensor = match sensor.uwb_receive(Timeout::none(), &mut data_anch1) {
-        Ok(sensor) => sensor,
-        Err((sensor, e)) => {
-            println!("Erreur");
-            return Err((sensor, e));
-        }
-    };
-
-    /*****************************************************************/
-    /* Initialization of the measurement, sending of the first frame */
-    /*****************************************************************/
-    println!("STEP 2 : Requesting new measurement...");
-
-    let mut buff: [u8; 25] = [0; 25];
-    sensor = sensor.uwb_send(&buff, None)?; // T1 is stored at the same time
-    
-    let mut uwb_data_r = UwbRData {
-        addr_sender: Some(dw3000::mac::Address::Short(dw3000::mac::PanId(0x111), dw3000::mac::ShortAddress(0x0))),
-        data: [0; 6],
-        r_time: 0,
-    };
-
-
-    /******************************************/
-    /* Waiting for reception on the 3 modules */
-    /******************************************/
-    println!("STEP 3 : Wainting answer for the anchor...");
-
-    sensor = sensor.uwb_receive(timer, &mut uwb_data_r)?;
-    if uwb_data_r.data[0] == 1099511627775 {
-        // 2^40 - 1
-        println!("Error on Anchor !");
-        return Err((sensor, Error::ModuleAnchor));
-    } else {
-        match uwb_data_r.addr_sender {
-            Some(ADD_ANCHOR1) => {
-                sensor.timing_data[1] = uwb_data_r.r_time; // T4 anchor 1
-            }
-            _ => {
-                println!("Receiving from unknown anchor !");
-                sensor = send_erreur(sensor)?;
-                return Err((sensor, Error::ModuleInconnu));
-            }
-        };
-    }
-    
-    /*******************************************/
-    /* Offset module responses for each module */
-    /*******************************************/
-    println!("STEP 4 : Final offset response...");
-
-    let delay_rx_tx = (sensor.timing_data[1] + (15000 * 63898)) % 1_0995_1162_7776 as u64;
-    sensor.timing_data[4] = ((delay_rx_tx >> 9) << 9) + ant_delay ;
-    
-    convert_u64_u8(&sensor.timing_data, &mut buff);
-    sensor = sensor.uwb_send(&buff, Some(delay_rx_tx))?;
-
-    println!("Exchange procedure terminated on Tag side");
-    Ok(sensor)
-}
-
-fn init() -> UWBSensor<Spi, rppalOutputPin, hl::Ready> {
     /******************************************************* */
-    /************        BASIC CONFIGURATION      ********** */
-    /******************************************************* */
-
-    let spi = Spi::new(Bus::Spi1, SlaveSelect::Ss0, 4_500_000, Mode::Mode0)
-        .expect("Failed to configure the spi");
-    let gpio = Gpio::new().expect("Failed to configure GPIO");
-    let cs = gpio.get(16).expect("Failed to set up CS PIN").into_output();
+	/************        BASIC CONFIGURATION      ********** */
+	/******************************************************* */
+    let spi = Spi::new(Bus::Spi1, SlaveSelect::Ss0, 4_500_000, Mode::Mode0).unwrap();
+    let gpio = Gpio::new().unwrap();
+    let cs = gpio.get(16).unwrap().into_output();
 
     /****************************************************** */
-    /*****                DW3000 RESET              ******* */
-    /****************************************************** */
+	/*****                DW3000 RESET              ******* */
+	/****************************************************** */
 
     let mut reset = gpio
         .get(4)
@@ -150,15 +67,13 @@ fn init() -> UWBSensor<Spi, rppalOutputPin, hl::Ready> {
     reset.set_low();
     reset.set_high();
 
-    /****************************************************** */
-    /*********        UWBsensor CONFIGURATION      ******** */
-    /****************************************************** */
+    thread::sleep(Duration::from_millis(500));
 
-    let uwbsensor = ok_or_panic(
-        UWBSensor::new(spi, cs),
-        "Failed to create an UWBSensor object",
-    );
-    //uwbsensor.dw3000.set_antenna_delay(4416, 16500).expect("Fail set antenna delay");
+    // create an UWBSensor
+    let mut uwbsensor = ok_or_panic(UWBSensor::new(spi, cs),"Failed to create an UWBSensor object");
+    uwbsensor.id = 1;
+    uwbsensor.dw3000.set_address(PAN_ID, ADD_S_ANCH1).expect("Erreur set adress");
+
     println!("Init OK");
     uwbsensor
 }

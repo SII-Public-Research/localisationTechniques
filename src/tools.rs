@@ -50,19 +50,3 @@ pub fn convert_u64_u8(u64time: &[u64], u8_array: &mut [u8; 25]) {
         u8_array[j+4] = (u64time[i] >> (8 * 0)) as u8;
     }
 }
-
-
-// IIR filtre, to be used on the distances measured by UWBSensor
-pub fn filtre_iir<SPI, CS>(
-    mut sensor: UWBSensor<SPI, CS, Ready>,
-) -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)>
-where
-    SPI: Transfer<u8> + Write<u8>,
-    CS: OutputPin,
-{
-    let a: f64 = 0.96;
-    let distance_filtre: f64 = ((1.0 - a) * sensor.distance) + (a * sensor.previous_distance_filtre);
-    sensor.previous_distance_filtre = distance_filtre;
-    sensor.distance_filtre = distance_filtre;
-    Ok(sensor)
-}

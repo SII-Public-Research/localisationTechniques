@@ -1,17 +1,21 @@
 use std::io::{self, Write};
 
-use raspberry_client::uwb_sensor::*;
-use raspberry_client::{ok_or_panic, scanf};
-use raspberry_client::experiment_file::*;
+use localisationtechniques::{
+    rtt_ds_algorithms::*,
+    uwb_basics::*,
+    tools::*,
+    experiment_file::*,
+    ok_or_panic,
+    scanf,
+};
 
 use chrono::prelude::*;
 
 use rppal::gpio::{Gpio, OutputPin};
 use rppal::spi::{Bus, Mode, SlaveSelect, Spi};
-use rppal::hal::Timer;
 use std::time::Duration;
 
-use dw3000::hl;
+use dw3000::hl::Ready;
 
 use std::thread;
 
@@ -37,7 +41,7 @@ async fn main() {
     let mut uwbsensor = init();
 
     // A start measure is needed for initiatlise IIR filter
-    uwbsensor = match rtt_ds_initiator(uwbsensor).await {
+    uwbsensor = match rtt_ds_initiator(uwbsensor, OptionTimeout::Some(Timeout::new(500))).await {
         Ok(mut sensor1) => {
             sensor1.previous_distance_filtre = sensor1.distance;
             sensor1
@@ -62,7 +66,7 @@ async fn main() {
 
         while nb_current_measure < nb_measure {
             println!("\nNew measure");
-            uwbsensor = match rtt_ds_initiator(uwbsensor).await {
+            uwbsensor = match rtt_ds_initiator(uwbsensor, OptionTimeout::Some(Timeout::new(500))).await {
                 Ok(sensor) => {
                     println!("OK");
                     io::stdout().flush().unwrap();
@@ -101,7 +105,7 @@ async fn main() {
 }
 
 
-fn init() -> UWBSensor<Spi, OutputPin, Ready> 
+fn init() -> UWBSensor<Spi, OutputPin, Ready>
 {
 
     /******************************************************* */

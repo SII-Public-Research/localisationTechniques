@@ -2,30 +2,31 @@
 // multiple futures onto the same thread.
 use futures::executor::block_on;
 
-use rppal::gpio::{Gpio, OutputPin as rppalOutputPin};
+use rppal::gpio::{Gpio, OutputPin};
 use rppal::hal::Timer;
 use rppal::spi::{Bus, Mode, SlaveSelect, Spi};
 
-use std::io::{self, Write as stdWrite};
-use std::time::Duration;
-
-use raspberry_client::uwb_sensor::*;
-use raspberry_client::{error::Error, ok_or_panic};
-
-use dw3000::{hl, Ready};
-
-use embedded_hal::{
-    blocking::spi::{Transfer, Write},
-    digital::v2::OutputPin,
-    timer::CountDown,
+use std::{
+    time::Duration,
+    thread,
+    io::{self, Write},
 };
+
+use localisationtechniques::{
+    rtt_ds_algorithms::*,
+    uwb_basics::*,
+    tools::*,
+    ok_or_panic,
+};
+
+use dw3000::hl::Ready;
 
 async fn async_main() {
     let mut uwbsensor = init();
     loop {
         println!("\nNew measure");
         let _timer = Timer::new();
-        uwbsensor = match rtt_ds_responder(uwbsensor, Timeout::new(_timer, Duration::from_millis(5000)), 16385) {
+        uwbsensor = match rtt_ds_responder(uwbsensor, OptionTimeout::None, 16385) {
             Ok(sensor) => {
                 print!("OK");
                 io::stdout().flush().unwrap();
@@ -46,7 +47,7 @@ fn main() {
 }
 
 
-pub fn init() -> UWBSensor<Spi, OutputPin, Ready> 
+fn init() -> UWBSensor<Spi, OutputPin, Ready>
 {
 
     /******************************************************* */

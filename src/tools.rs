@@ -1,14 +1,11 @@
 use rppal::hal::Timer;
 use std::time::Duration;
 
-
-
-
 // This is a structure to be used with uwb_basics functions.
 #[derive(Copy, Clone, Debug)]
 pub struct Timeout
 {
-    pub timer: Timer,
+    pub timer: Timer, // millis
     pub count: Duration,
 }
 
@@ -21,7 +18,7 @@ impl Timeout
         }
     }
 }
-
+#[derive(Copy, Clone, Debug)]
 pub enum OptionTimeout
 {
     Some(Timeout),

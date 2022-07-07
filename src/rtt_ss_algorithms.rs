@@ -4,27 +4,22 @@ use crate::{
     uwb_basics::*
 };
 
-use dw3000::{
-    block,
-    hl::{self, DW3000},
-    time::Instant,
-    Config, Ready, Uninitialized,
-};
+use dw3000::hl::Ready;
 
 use embedded_hal::{
     blocking::spi::{Transfer, Write},
     digital::v2::OutputPin,
 };
 
-
+use std::marker::Send;
 
 pub fn rtt_ss_inititor <SPI, CS>(
     mut sensor: UWBSensor<SPI, CS, Ready>,
     timeout: OptionTimeout,
 ) -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)>
 where
-    SPI: Transfer<u8> + Write<u8>,
-    CS: OutputPin,
+    SPI: Transfer<u8> + Write<u8> + Send + 'static,
+    CS: OutputPin + Send + 'static,
 {
 
     // SENDING FIRST MESSAGE
@@ -58,12 +53,12 @@ where
 
 
 pub fn rtt_ss_responder <SPI, CS>(
-    mut sensor: UWBSensor<SPI, OutputPin, Ready>,
+    mut sensor: UWBSensor<SPI, CS, Ready>,
     timeout: OptionTimeout,
 ) -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)>
 where
-    SPI: Transfer<u8> + Write<u8>,
-    CS: ,
+    SPI: Transfer<u8> + Write<u8> + Send + 'static,
+    CS: OutputPin + Send + 'static,
 {
     // RECEIVING THE FIRST MESSAGE
     println!("STEP 1 : Waiting ping...");

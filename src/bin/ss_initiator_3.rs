@@ -7,11 +7,17 @@ use std::io::{self, Write};
 use std::thread;
 use std::time::Duration;
 
-use dw3000::hl;
-use raspberry_client::{ok_or_panic, scanf};
-use raspberry_client::uwb_sensor::*;
+use dw3000::hl::Ready;
 
-use raspberry_client::experiment_file::*;
+use localisationtechniques::{
+    rtt_ss_algorithms::*,
+    uwb_basics::*,
+    tools::*,
+    experiment_file::*,
+    ok_or_panic,
+    scanf,
+};
+
 use chrono::prelude::*;
 
 
@@ -47,7 +53,7 @@ async fn main() {
               
         while nb_current_measure < nb_measure {
             println!("\nNew measure");
-            uwbsensor1 = match rtt_ss_inititor(uwbsensor1, Timeout::new(_timer, Duration::from_millis(500))) {
+            uwbsensor1 = match rtt_ss_inititor(uwbsensor1, OptionTimeout::Some(Timeout::new(500))) {
                 Ok(sensor) => {
                     println!("OK");
                     println!("Distance 1 = {}", sensor.distance);
@@ -63,7 +69,7 @@ async fn main() {
             };
             thread::sleep(Duration::from_millis(25));
 
-            uwbsensor2 = match rtt_ss_inititor(uwbsensor2, Timeout::new(_timer, Duration::from_millis(500))) {
+            uwbsensor2 = match rtt_ss_inititor(uwbsensor2, OptionTimeout::Some(Timeout::new(500))) {
                 Ok(sensor) => {
                     println!("OK");
                     println!("Distance 2 = {}", sensor.distance);
@@ -79,7 +85,7 @@ async fn main() {
             };
             thread::sleep(Duration::from_millis(25));
 
-            uwbsensor3 = match rtt_ss_inititor(uwbsensor3, Timeout::new(_timer, Duration::from_millis(500))) {
+            uwbsensor3 = match rtt_ss_inititor(uwbsensor3,OptionTimeout::Some(Timeout::new(500))) {
                 Ok(sensor) => {
                     println!("OK");
                     println!("Distance 3= {}", sensor.distance);
@@ -112,7 +118,7 @@ async fn main() {
 }
 
 
-pub fn init_3() -> (UWBSensor<Spi, OutputPin, hl::Ready>, UWBSensor<Spi, OutputPin, hl::Ready>, UWBSensor<Spi, OutputPin, hl::Ready>) 
+fn init_3() -> (UWBSensor<Spi, OutputPin, Ready>, UWBSensor<Spi, OutputPin, Ready>, UWBSensor<Spi, OutputPin, Ready>)
 {
     /******************************************************* */
 	/************        BASIC CONFIGURATION      ********** */

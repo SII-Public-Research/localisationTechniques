@@ -1,19 +1,24 @@
 use std::io::{self, Write};
 
-use localisationtechniques::uwb_sensor::*;
-use localisationtechniques::{ok_or_panic, scanf};
-use localisationtechniques::experiment_file::*;
+use localisationtechniques::{
+    rtt_ds_algorithms::*,
+    uwb_basics::*,
+    tools::*,
+    experiment_file::*,
+    ok_or_panic,
+    scanf,
+};
 
 use chrono::prelude::*;
 
 use rppal::gpio::{Gpio, OutputPin};
 use rppal::spi::{Bus, Mode, SlaveSelect, Spi};
-use rppal::hal::Timer;
 use std::time::Duration;
 
-use dw3000::hl;
+use dw3000::hl::Ready;
 
 use std::thread;
+
 
 
 // Returns current time HH:MM:SS
@@ -39,7 +44,7 @@ async fn main() {
 
     // A start measure is needed for initiatlise IIR filter
     (uwbsensor1, uwbsensor2, uwbsensor3) =
-    match rtt_ds_initiator_3(uwbsensor1, uwbsensor2, uwbsensor3).await {
+    match rtt_ds_initiator_3(uwbsensor1, uwbsensor2, uwbsensor3, OptionTimeout::Some(Timeout::new(500))).await {
         Ok((mut sensor1, mut sensor2, mut sensor3)) => {
             sensor1.previous_distance_filtre = sensor1.distance;
             sensor2.previous_distance_filtre = sensor2.distance;
@@ -69,7 +74,7 @@ async fn main() {
 
         while nb_current_measure < nb_measure {
             println!("\nNew measure");
-            (uwbsensor1, uwbsensor2, uwbsensor3) = match rtt_ds_initiator_3(uwbsensor1, uwbsensor2, uwbsensor3).await {
+            (uwbsensor1, uwbsensor2, uwbsensor3) = match rtt_ds_initiator_3(uwbsensor1, uwbsensor2, uwbsensor3, OptionTimeout::Some(Timeout::new(500))).await {
                 Ok(sensors) => {
                     println!("OK");
                     io::stdout().flush().unwrap();
@@ -118,7 +123,7 @@ async fn main() {
 }
 
 
-fn init_3() -> (UWBSensor<Spi, OutputPin, hl::Ready>, UWBSensor<Spi, OutputPin, hl::Ready>, UWBSensor<Spi, OutputPin, hl::Ready>) 
+fn init_3() -> (UWBSensor<Spi, OutputPin, Ready>, UWBSensor<Spi, OutputPin, Ready>, UWBSensor<Spi, OutputPin, Ready>)
 {
     /******************************************************* */
 	/************        BASIC CONFIGURATION      ********** */

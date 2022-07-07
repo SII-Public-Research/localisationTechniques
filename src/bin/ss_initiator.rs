@@ -6,10 +6,16 @@ use std::io::{self, Write};
 use std::thread;
 use std::time::Duration;
 
-use dw3000::hl;
-use raspberry_client::{ok_or_panic, scanf};
-use raspberry_client::uwb_sensor::*;
-use raspberry_client::experiment_file::*;
+use dw3000::hl::Ready;
+use localisationtechniques::{
+    rtt_ss_algorithms::*,
+    uwb_basics::*,
+    tools::*,
+    experiment_file::*,
+    ok_or_panic,
+    scanf,
+};
+
 use chrono::*;
 
 // Returns current time HH:MM:SS
@@ -73,8 +79,8 @@ async fn main()  {
 }
 
 
-fn init() -> UWBSensor<Spi, OutputPin, hl::Ready> {
-   
+fn init() -> UWBSensor<Spi, OutputPin, Ready>
+{ 
     /******************************************************* */
 	/************        BASIC CONFIGURATION      ********** */
 	/******************************************************* */

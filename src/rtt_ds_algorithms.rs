@@ -1,33 +1,33 @@
 use crate::{
+    ok_or_panic,
     error::Error,
     tools::*,
     uwb_basics::*
 };
 
-use dw3000::{
-    block,
-    hl::{self, DW3000},
-    time::Instant,
-    Config, Ready, Uninitialized,
-};
+use dw3000::hl::Ready;
 
 use embedded_hal::{
     blocking::spi::{Transfer, Write},
-    timer::CountDown,
+    digital::v2::OutputPin,
 };
-use embedded_timeout_macros::block_timeout;
-
-use rppal::gpio::{Gpio, OutputPin};
-use rppal::spi::{Bus, Mode, SlaveSelect, Spi};
 use rppal::hal::Timer;
-use std::time::Duration;
 
+use std::{
+    time::Duration,
+    thread,
+    marker::Send,
+};
 
-async fn rtt_ds_initiator(
-    mut uwb: UWBSensor<Spi, OutputPin, hl::Ready>
+pub async fn rtt_ds_initiator<SPI, CS>(
+    mut sensor: UWBSensor<SPI, CS, Ready>,
+    timeout: OptionTimeout,
 ) -> Result<
-    UWBSensor<Spi, OutputPin, hl::Ready>,
-    (UWBSensor<Spi, OutputPin, hl::Ready>, &'static str)> 
+    UWBSensor<SPI, CS, Ready>,
+    (UWBSensor<SPI, CS, Ready>, &'static str)>
+where
+    SPI: Transfer<u8> + Write<u8> + Send + 'static,
+    CS: OutputPin + Send + 'static,
 {
     let mut data_anch1 = UwbRData {
         addr_sender: Some(dw3000::mac::Address::Short(dw3000::mac::PanId(0x111), dw3000::mac::ShortAddress(0x0))),
@@ -36,7 +36,7 @@ async fn rtt_ds_initiator(
     };
         
     println!("STEP 1 : Sending first ping...");
-    uwb = ok_or_panic(uwb.uwb_send(&[0], None), "fail");
+    sensor = ok_or_panic(sensor.uwb_send(&[0], None), "fail");
 
 
     /************************************/
@@ -45,9 +45,8 @@ async fn rtt_ds_initiator(
     println!("STEP 2 : Waiting measurement request on the anchor...");
 
     let _timer = Timer::new();
-    let rcv_timeout: u64 = 100; // millis
 
-    let mut uwb = match uwb.uwb_receive(Timeout::new(_timer, Duration::from_millis(rcv_timeout)), &mut data_anch1) {
+    let mut sensor = match sensor.uwb_receive(timeout, &mut data_anch1) {
         Ok(mut sensor) => {
             sensor.timing_data[1] = data_anch1.r_time;
             if data_anch1.data[0] == 1099511627775  { // 2^40 - 1 
@@ -63,9 +62,9 @@ async fn rtt_ds_initiator(
         }
     };
 
-    if uwb.timing_data[1] == 0 {
-        uwb.error = 0;
-        return Err((uwb, "fail"))
+    if sensor.timing_data[1] == 0 {
+        sensor.error = 0;
+        return Err((sensor, "fail"))
     }
 
 
@@ -78,8 +77,8 @@ async fn rtt_ds_initiator(
     // The final computation is made in each anchor with T2 and T3
     let buff: [u8;10] = [0;10];
     let mut delay1 = 0;
-    uwb = ok_or_panic(calc_delay_send(uwb, &mut delay1), "fail");
-    uwb = ok_or_panic(uwb.uwb_send(&buff, Some(delay1)), "fail");
+    sensor = ok_or_panic(calc_delay_send(sensor, &mut delay1), "fail");
+    sensor = ok_or_panic(sensor.uwb_send(&buff, Some(delay1)), "fail");
 
 
     /************************************/
@@ -87,7 +86,7 @@ async fn rtt_ds_initiator(
     /************************************/
     println!("STEP 4 : Waiting for an answer on the anchor...");
 
-    let mut uwb = match uwb.uwb_receive(Timeout::new(_timer, Duration::from_millis(rcv_timeout)), &mut data_anch1) {
+    let mut sensor = match sensor.uwb_receive(timeout, &mut data_anch1) {
         Ok(mut sensor) => {
             if data_anch1.data[0] == 1099511627775  { // 2^40 - 1 
                 sensor.error = 1;  
@@ -112,32 +111,30 @@ async fn rtt_ds_initiator(
     /**************************/
     println!("STEP 5 : Distance calculation...");
 
-    uwb = ok_or_panic(
-        calc_distance_double(uwb),
+    sensor = ok_or_panic(
+        calc_distance_double(sensor),
         "Distance calculation failed",
     );
-    uwb = ok_or_panic(
-        filtre_iir(uwb),
+    sensor = ok_or_panic(
+        filtre_iir(sensor),
         "Filter failed",
     );
 
-    println!("Distance = {}", uwb.distance);
-    println!("Filtered Distance = {}", uwb.distance_filtre);
+    println!("Distance = {}", sensor.distance);
+    println!("Filtered Distance = {}", sensor.distance_filtre);
 
-    Ok(uwb)
+    Ok(sensor)
 }
 
 
-pub fn rtt_ds_responder<TIM, X, SPI, CS>(
+pub fn rtt_ds_responder<SPI, CS>(
     mut sensor: UWBSensor<SPI, CS, Ready>,
-    timer: Option<Timeout<TIM, X>>,
+    timeout: OptionTimeout,
     ant_delay: u64,
 ) -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)>
 where
-    SPI: Transfer<u8> + Write<u8>,
-    CS: OutputPin,
-    TIM: CountDown + Copy,
-    X: Into<TIM::Time> + Copy,
+    SPI: Transfer<u8> + Write<u8> + Send + 'static,
+    CS: OutputPin + Send + 'static,
 {
     sensor.id = 5;
 
@@ -151,7 +148,7 @@ where
     };
 
     println!("STEP 1 : Waiting ping...");
-    sensor = match sensor.uwb_receive(Timeout::none(), &mut data_anch1) {
+    sensor = match sensor.uwb_receive(timeout, &mut data_anch1) {
         Ok(sensor) => sensor,
         Err((sensor, e)) => {
             println!("Erreur");
@@ -179,7 +176,7 @@ where
     /******************************************/
     println!("STEP 3 : Wainting answer for the anchor...");
 
-    sensor = sensor.uwb_receive(timer, &mut uwb_data_r)?;
+    sensor = sensor.uwb_receive(timeout, &mut uwb_data_r)?;
     if uwb_data_r.data[0] == 1099511627775 {
         // 2^40 - 1
         println!("Error on Anchor !");
@@ -213,14 +210,18 @@ where
 }
 
 
-async pub fn rtt_ds_initiator_3(
-    mut uwb1: UWBSensor<Spi, OutputPin, hl::Ready>, 
-    uwb2: UWBSensor<Spi, OutputPin, hl::Ready>, 
-    uwb3: UWBSensor<Spi, OutputPin, hl::Ready> 
+pub async fn rtt_ds_initiator_3<SPI, CS>(
+    mut sensor1: UWBSensor<SPI, CS, Ready>, 
+    sensor2: UWBSensor<SPI, CS, Ready>, 
+    sensor3: UWBSensor<SPI, CS, Ready>,
+    timeout: OptionTimeout,
 ) -> Result<
-    (UWBSensor<Spi, OutputPin, hl::Ready>, UWBSensor<Spi, OutputPin, hl::Ready>, UWBSensor<Spi, OutputPin, hl::Ready>),
-    (UWBSensor<Spi, OutputPin, hl::Ready>, UWBSensor<Spi, OutputPin, hl::Ready>, UWBSensor<Spi, OutputPin, hl::Ready>,
+    (UWBSensor<SPI, CS, Ready>, UWBSensor<SPI, CS, Ready>, UWBSensor<SPI, CS, Ready>),
+    (UWBSensor<SPI, CS, Ready>, UWBSensor<SPI, CS, Ready>, UWBSensor<SPI, CS, Ready>,
     &'static str)> 
+where
+    SPI: Transfer<u8> + Write<u8> + Send + 'static,
+    CS: OutputPin + Send + 'static,
 {
     let mut data_anch1 = UwbRData {
         addr_sender: Some(dw3000::mac::Address::Short(dw3000::mac::PanId(0x111), dw3000::mac::ShortAddress(0x0))),
@@ -238,9 +239,9 @@ async pub fn rtt_ds_initiator_3(
         r_time: 0,
     };
 
-        
+
     println!("STEP 1 : Sending first ping...");
-    uwb1 = ok_or_panic(uwb1.uwb_send(&[0], None), "fail");
+    sensor1 = ok_or_panic(sensor1.uwb_send(&[0], None), "fail");
 
 
     /****************************************************/
@@ -249,10 +250,9 @@ async pub fn rtt_ds_initiator_3(
     println!("STEP 2 : Waiting measurement request on all 3 anchors...");
 
     let _timer = Timer::new();
-    let rcv_timeout: u64 = 5000; // millis
 
     let blocking_task1 = tokio::task::spawn_blocking(move || {
-        let uwb1 = match uwb1.uwb_receive(Timeout::new(_timer, Duration::from_millis(rcv_timeout)), &mut data_anch1) {
+        let sensor1 = match sensor1.uwb_receive(timeout, &mut data_anch1) {
             Ok(mut sensor) => {
                 sensor.timing_data[1] = data_anch1.r_time;
                 if data_anch1.data[0] == 1099511627775  { // 2^40 - 1 
@@ -267,10 +267,10 @@ async pub fn rtt_ds_initiator_3(
                 sensor
             }
         };
-        uwb1
+        sensor1
     });
     let blocking_task2 = tokio::task::spawn_blocking(move || {
-        let uwb2 = match uwb2.uwb_receive(Timeout::new(_timer, Duration::from_millis(rcv_timeout)), &mut data_anch2) {
+        let sensor2 = match sensor2.uwb_receive(timeout, &mut data_anch2) {
             Ok(mut sensor) => {
                 sensor.timing_data[1] = data_anch2.r_time;
                 if data_anch1.data[0] == 1099511627775  { // 2^40 - 1 
@@ -285,10 +285,10 @@ async pub fn rtt_ds_initiator_3(
                 sensor
             }
         };
-        uwb2
+        sensor2
     });
     let blocking_task3 = tokio::task::spawn_blocking(move || {
-        let uwb3 = match uwb3.uwb_receive(Timeout::new(_timer, Duration::from_millis(rcv_timeout)), &mut data_anch3) {
+        let sensor3 = match sensor3.uwb_receive(timeout, &mut data_anch3) {
             Ok(mut sensor) => {
                 sensor.timing_data[1] = data_anch3.r_time;
                 if data_anch1.data[0] == 1099511627775  { // 2^40 - 1 
@@ -303,18 +303,18 @@ async pub fn rtt_ds_initiator_3(
                 sensor
             }
         };
-        uwb3
+        sensor3
     });
 
-    let mut uwb1 = blocking_task1.await.unwrap();
-    let mut uwb2 = blocking_task2.await.unwrap();
-    let mut uwb3 = blocking_task3.await.unwrap();
+    let mut sensor1 = blocking_task1.await.unwrap();
+    let mut sensor2 = blocking_task2.await.unwrap();
+    let mut sensor3 = blocking_task3.await.unwrap();
 
-    if uwb1.timing_data[1] == 0 || uwb2.timing_data[1] == 0 || uwb3.timing_data[1] == 0 {
-        uwb1.error=0;
-        uwb2.error=0;
-        uwb3.error=0;
-        return Err((uwb1, uwb2, uwb3, "fail"))
+    if sensor1.timing_data[1] == 0 || sensor2.timing_data[1] == 0 || sensor3.timing_data[1] == 0 {
+        sensor1.error=0;
+        sensor2.error=0;
+        sensor3.error=0;
+        return Err((sensor1, sensor2, sensor3, "fail"))
     }
 
 
@@ -328,16 +328,16 @@ async pub fn rtt_ds_initiator_3(
     let buff: [u8;10] = [0;10];
 
     let mut delay1 = 0;
-    uwb1 = ok_or_panic(calc_delay_send(uwb1, &mut delay1), "fail");
-    uwb1 = ok_or_panic(uwb1.uwb_send(&buff, Some(delay1)), "fail");
+    sensor1 = ok_or_panic(calc_delay_send(sensor1, &mut delay1), "fail");
+    sensor1 = ok_or_panic(sensor1.uwb_send(&buff, Some(delay1)), "fail");
 
     let mut delay2 = 0;
-    uwb2 = ok_or_panic(calc_delay_send(uwb2, &mut delay2), "fail");
-    uwb2 = ok_or_panic(uwb2.uwb_send(&buff, Some(delay2)), "fail");
+    sensor2 = ok_or_panic(calc_delay_send(sensor2, &mut delay2), "fail");
+    sensor2 = ok_or_panic(sensor2.uwb_send(&buff, Some(delay2)), "fail");
 
     let mut delay3 = 0;
-    uwb3 = ok_or_panic(calc_delay_send(uwb3, &mut delay3), "fail");
-    uwb3 = ok_or_panic(uwb3.uwb_send(&buff, Some(delay3)), "fail");
+    sensor3 = ok_or_panic(calc_delay_send(sensor3, &mut delay3), "fail");
+    sensor3 = ok_or_panic(sensor3.uwb_send(&buff, Some(delay3)), "fail");
 
 
     /****************************************************/
@@ -346,7 +346,7 @@ async pub fn rtt_ds_initiator_3(
     println!("STEP 4 : Waiting for an answer on each anchor...");
 
     let blocking_task1 = tokio::task::spawn_blocking(move || {
-        let uwb1 = match uwb1.uwb_receive(Timeout::new(_timer, Duration::from_millis(rcv_timeout)), &mut data_anch1) {
+        let sensor1 = match sensor1.uwb_receive(timeout, &mut data_anch1) {
             Ok(mut sensor) => {
                 if data_anch1.data[0] == 1099511627775  { // 2^40 - 1 
                     sensor.error = 1;  
@@ -365,10 +365,10 @@ async pub fn rtt_ds_initiator_3(
                 sensor
             }
         };
-        uwb1
+        sensor1
     });
     let blocking_task2 = tokio::task::spawn_blocking(move || {
-        let uwb2 = match uwb2.uwb_receive(Timeout::new(_timer, Duration::from_millis(rcv_timeout)), &mut data_anch2) {
+        let sensor2 = match sensor2.uwb_receive(timeout, &mut data_anch2) {
             Ok(mut sensor) => {
                 if data_anch1.data[0] == 1099511627775  { // 2^40 - 1 
                     sensor.error = 1;  
@@ -387,10 +387,10 @@ async pub fn rtt_ds_initiator_3(
                 sensor
             }
         };
-        uwb2
+        sensor2
     });
     let blocking_task3 = tokio::task::spawn_blocking(move || {
-        let uwb3 = match uwb3.uwb_receive(Timeout::new(_timer, Duration::from_millis(rcv_timeout)), &mut data_anch3) {
+        let sensor3 = match sensor3.uwb_receive(timeout, &mut data_anch3) {
             Ok(mut sensor) => {
                 if data_anch1.data[0] == 1099511627775  { // 2^40 - 1 
                     sensor.error = 1;  
@@ -409,12 +409,12 @@ async pub fn rtt_ds_initiator_3(
                 sensor
             }
         };
-        uwb3
+        sensor3
     });
 
-    let mut uwb1 = blocking_task1.await.unwrap();
-    let mut uwb2 = blocking_task2.await.unwrap();
-    let mut uwb3 = blocking_task3.await.unwrap();
+    let mut sensor1 = blocking_task1.await.unwrap();
+    let mut sensor2 = blocking_task2.await.unwrap();
+    let mut sensor3 = blocking_task3.await.unwrap();
 
     
     /**************************/
@@ -422,56 +422,54 @@ async pub fn rtt_ds_initiator_3(
     /**************************/
     println!("STEP 5 : Distances calculations...");
 
-    uwb1 = ok_or_panic(
-        calc_distance_double(uwb1),
+    sensor1 = ok_or_panic(
+        calc_distance_double(sensor1),
         "Distance calculations anchor 1 failed",
     );
-    uwb1 = ok_or_panic(
-        filtre_iir(uwb1),
+    sensor1 = ok_or_panic(
+        filtre_iir(sensor1),
         " Distance filter anchor 01 failed",
     );
 
-    uwb2 = ok_or_panic(
-        calc_distance_double(uwb2),
+    sensor2 = ok_or_panic(
+        calc_distance_double(sensor2),
         "Distance calculations anchor 2 failed",
     );
-    uwb2 = ok_or_panic(
-        filtre_iir(uwb2),
+    sensor2 = ok_or_panic(
+        filtre_iir(sensor2),
         " Distance filter anchor 01 failed",
     );
     
-    uwb3
+    sensor3
      = ok_or_panic(
-        calc_distance_double(uwb3),
+        calc_distance_double(sensor3),
         "Distance calculations anchor 3 failed",
     );
-    uwb3 = ok_or_panic(
-        filtre_iir(uwb3),
+    sensor3 = ok_or_panic(
+        filtre_iir(sensor3),
         " Distance filter anchor 01 failed",
     );
 
-    println!("Anchor 1 - Row distance = {}", uwb1.distance);
-    println!("Anchor 2 - Row distance = {}", uwb2.distance);
-    println!("Anchor 3 - Row distance = {}", uwb3.distance);
+    println!("Anchor 1 - Row distance = {}", sensor1.distance);
+    println!("Anchor 2 - Row distance = {}", sensor2.distance);
+    println!("Anchor 3 - Row distance = {}", sensor3.distance);
 
-    println!("Anchor 1 - Filtered distance = {}", uwb1.distance_filtre);
-    println!("Anchor 2 - Filtered distance = {}", uwb2.distance_filtre);
-    println!("Anchor 3 - Filtered distance = {}", uwb3.distance_filtre);
+    println!("Anchor 1 - Filtered distance = {}", sensor1.distance_filtre);
+    println!("Anchor 2 - Filtered distance = {}", sensor2.distance_filtre);
+    println!("Anchor 3 - Filtered distance = {}", sensor3.distance_filtre);
 
-    Ok((uwb1, uwb2, uwb3))
+    Ok((sensor1, sensor2, sensor3,))
 }
 
 
-pub fn rtt_ds_responder_3<TIM, X, SPI, CS>(
+pub fn rtt_ds_responder_3<SPI, CS>(
     mut sensor: UWBSensor<SPI, CS, Ready>,
-    timer: Option<Timeout<TIM, X>>,
+    timeout: OptionTimeout,
     ant_delay: u64,
 ) -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)>
 where
-    SPI: Transfer<u8> + Write<u8>,
-    CS: OutputPin,
-    TIM: CountDown + Copy,
-    X: Into<TIM::Time> + Copy,
+    SPI: Transfer<u8> + Write<u8> + Send + 'static,
+    CS: OutputPin + Send + 'static,
 {
     sensor.id = 5;
     let mut nb_anchor = 0;
@@ -486,7 +484,7 @@ where
     };
 
     println!("STEP 1 : Waiting ping...");
-    sensor = match sensor.uwb_receive(Timeout::none(), &mut data_anch1) {
+    sensor = match sensor.uwb_receive(timeout, &mut data_anch1) {
         Ok(t) => t,
         Err((t, e)) => {
             println!("Erreur");
@@ -518,7 +516,7 @@ where
     println!("STEP 3 : Wainting answer for each anchor...");
 
     while nb_anchor < 7 { // 3 bits for 3 anchors flag
-        sensor = sensor.uwb_receive(timer, &mut uwb_data_r)?;
+        sensor = sensor.uwb_receive(timeout, &mut uwb_data_r)?;
 
         // Checking the content before assigning the value to the correct timestamp
         if uwb_data_r.data[0] == 1099511627775 { // 2^40 - 1

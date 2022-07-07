@@ -62,7 +62,7 @@ where
             dw3000: DW3000::new(spi, cs).init()?.config(Config::default())?,
             connection: false,
             timing_data: [0; 10],
-            distance: -1,
+            distance: -1.0,
             addr_dest: dw3000::mac::ShortAddress(0x0),
             id: 0,
             ant_delay_tx: 16500,

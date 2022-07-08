@@ -14,19 +14,19 @@ use embedded_hal::{
 use embedded_timeout_macros::block_timeout;
 
 
-
-// ajouter une decription de ce qu'est PanId et ShortAddress
+// PanId : Personal Area Network Identifier, all modules are on the same network
 pub const PAN_ID : dw3000::mac::PanId = dw3000::mac::PanId(0x111);
 
+// ShortAddress : address assigned to the module, used to identify the device in the PAN.
 pub const ADD_S_ANCH1: dw3000::mac::ShortAddress = dw3000::mac::ShortAddress(0x124);
 pub const ADD_S_ANCH2: dw3000::mac::ShortAddress = dw3000::mac::ShortAddress(0x152);
 pub const ADD_S_ANCH3: dw3000::mac::ShortAddress = dw3000::mac::ShortAddress(0x282);
 
-pub const ADD_ANCHOR1: dw3000::mac::Address = dw3000::mac::Address::Short(dw3000::mac::PanId(0x111), dw3000::mac::ShortAddress(0x124));
-pub const ADD_ANCHOR2: dw3000::mac::Address = dw3000::mac::Address::Short(dw3000::mac::PanId(0x111), dw3000::mac::ShortAddress(0x152));
-pub const ADD_ANCHOR3: dw3000::mac::Address = dw3000::mac::Address::Short(dw3000::mac::PanId(0x111), dw3000::mac::ShortAddress(0x282));
+// Address : full adress
+pub const ADD_ANCHOR1: dw3000::mac::Address = dw3000::mac::Address::Short(PAN_ID, ADD_S_ANCH1);
+pub const ADD_ANCHOR2: dw3000::mac::Address = dw3000::mac::Address::Short(PAN_ID, ADD_S_ANCH2);
+pub const ADD_ANCHOR3: dw3000::mac::Address = dw3000::mac::Address::Short(PAN_ID, ADD_S_ANCH3);
 
-pub const ADD_ERROR: dw3000::mac::Address = dw3000::mac::Address::Short(dw3000::mac::PanId(0x0), dw3000::mac::ShortAddress(0x0));
 
 // Structure to store specifics data from the Message received (See Message<'l> struct on DW3000 crate)
 #[derive(Copy, Clone, Debug)]
@@ -47,8 +47,8 @@ pub struct UWBSensor<SPI, CS, STATE> {
     pub id: u64,                                // stocke id du module UWB
     pub ant_delay_tx: u64,                      // stocke le delai de l'antenne TX
     pub error: u8,                              // stocke le type d'erreur
-    pub distance_filtre: f64,                   // stocke la valeur de la distance filtré en m (utilisé par le filtre IIR)          
-    pub previous_distance_filtre: f64,          // stocke la valeur de la distance précédente filtré en m (utilisé par le filtre IIR)
+    pub filtered_distance: f64,                 // stocke la valeur de la distance filtré en m (utilisé par le filtre IIR)          
+    pub previous_filtered_distance: f64,        // stocke la valeur de la distance précédente filtré en m (utilisé par le filtre IIR)
 }
 
 
@@ -67,13 +67,14 @@ where
             id: 0,
             ant_delay_tx: 16500,
             error: 0, 
-            distance_filtre: 0.0,
-            previous_distance_filtre: 0.0, 
+            filtered_distance: 0.0,
+            previous_filtered_distance: 0.0, 
         };
 
         Ok(uwb_sensor)
     }
 }
+
 
 impl<SPI, CS> UWBSensor<SPI, CS, Ready>
 where
@@ -126,11 +127,11 @@ where
             "error when finish receiving, reset must be needed !",
         );
 
-        uwb_data_r.addr_sender = result.frame.header.source;        // Stocke l'addresse du module ayant envoyé la trame de données pour pouvoir vérifier qu'il ne s'agit pas d'un message d'un module inconnu
-        uwb_data_r.r_time = result.rx_time.value();                 // Stocke la valeur du timer lorsque la trame de données a été reçue
+        uwb_data_r.addr_sender = result.frame.header.source;        // Stores the address of the module that sent the data frame in order to check that it is not a message from an unknown module
+        uwb_data_r.r_time = result.rx_time.value();                 // Stores the timer value when the data frame has been received
         
         let mut nb_data = 0;
-        while nb_data <  (result.frame.payload.len() - 2) / 5 {     // Converti les données reçues (u8) en u64 quelque soit la taille de payload
+        while nb_data <  (result.frame.payload.len() - 2) / 5 {     // Convert received data (u8) to u64 wrt the payload size
             uwb_data_r.data[nb_data] = convert_u8_u64(result.frame.payload, nb_data);
             nb_data = nb_data + 1;
         }
@@ -139,14 +140,16 @@ where
     }
 
 
-    // Basic function to send a message. To be used with or without a Delay (no timeout = wait forever)
+    // Basic function to send a message. To be used with a send_time which is actually a timestamp at which the message is send
+    // WARNING :    send_time has to be well adjusted, so that the timestamp is not passed while the code is executing. 
+    //              In this case, we will wait for a full clock round to reach the timestamp in question.
     pub fn uwb_send(
         mut self, 
         buffer: &[u8],
-        delay: Option<u64>,
+        send_time: Option<u64>,
     ) -> Result<UWBSensor<SPI, CS, Ready>, (Self, Error<SPI, CS>)>
     {
-        let mut sending = match delay {
+        let mut sending = match send_time {
             Some(n) => { 
                 let sending = match self
                 .dw3000
@@ -188,13 +191,10 @@ where
             Err(_err) => panic!("error when finish sending, reset must be needed !"),
         };
 
-
         Ok(self)
     }
 
 }
-
-
 
 
 pub fn calc_delay_send <SPI, CS> (mut sensor: UWBSensor<SPI, CS, Ready>, delay: &mut u64) 
@@ -204,15 +204,11 @@ where
     CS: OutputPin,
 {
     *delay = (sensor.timing_data[1] + (sensor.id * 50000 * 63898)) % 1_0995_1162_7776 as u64;
-    //println!("delay send = {}", sensor.id * 100000 * 63898);  //us //GHz
     if sensor.id == 5 {
         sensor.timing_data[4] = ((*delay >> 9) << 9) + sensor.ant_delay_tx;
-    }
-    else {
+    } else {
         sensor.timing_data[2] = ((*delay >> 9) << 9) + sensor.ant_delay_tx;
-        //println!("T3 estimé = {}", sensor.timing_data[2]);
     }
-    //sensor.timing_data[4] =  sensor.timing_data[4] << 9 + 16348; 
 
     Ok(sensor)
 } 
@@ -239,18 +235,16 @@ where
     CS: OutputPin,
 {
 	let f: f64 = 1.0/499200000.0/128.0;
-    let s_light: f64 = 299792458.0; // vitesse de la lumière 10⁹m/s
+    let s_light: f64 = 299792458.0; // speed of light 10⁹m/s
 
-	// let clockoffset: f32 = ll().cia_diag_0().read().coe_ppm() as f32/(1<<26) as f32;
     let tround: f64 = (sensor.timing_data[3] - sensor.timing_data[0]) as f64;
     let treply: f64 = (sensor.timing_data[2] - sensor.timing_data[1]) as f64;
 
-	// let tick_tof = (tround-treply*(1.0-clockoffset)) / 2 as f32;
 	let tick_tof: f64 = (tround-treply) / 2 as f64;
 
 	let tof: f64 = tick_tof * f ;
 
-	sensor.distance = s_light * tof; // calcul pour obtenir une distance en m  
+	sensor.distance = s_light * tof; // distance in meters
     Ok(sensor)
 }
 
@@ -262,21 +256,22 @@ where
     CS: OutputPin,
 {
     let f: f64 = 1.0/499200000.0/128.0;
-    let s_light: f64 = 299792458.0; // speed of light m/s
+    let s_light: f64 = 299792458.0; // speed of light 10⁹m/s
 
-    let tround1: f64 = (sensor.timing_data[3] - sensor.timing_data[0]) as f64;  // T4-T1
-    let treply1: f64 = (sensor.timing_data[2] - sensor.timing_data[1]) as f64;  // T3-T2
-    let tround2: f64 = (sensor.timing_data[5] - sensor.timing_data[2]) as f64;  // T6-T3
-    let treply2: f64 = (sensor.timing_data[4] - sensor.timing_data[3]) as f64;  // T5-T4
+    let tround1: f64 = (sensor.timing_data[3] - sensor.timing_data[0]) as f64;  // T4 - T1
+    let treply1: f64 = (sensor.timing_data[2] - sensor.timing_data[1]) as f64;  // T3 - T2
+    let tround2: f64 = (sensor.timing_data[5] - sensor.timing_data[2]) as f64;  // T6 - T3
+    let treply2: f64 = (sensor.timing_data[4] - sensor.timing_data[3]) as f64;  // T5 - T4
 
-    let tick_tof: f64 = (((tround1 as u128 * tround2 as u128) - (treply1 as u128 * treply2 as u128 )) / ((tround1 + treply1 + tround2 + treply2) as u128)) as f64;
-    let tof_sec: f64 = tick_tof * f;
+    let tof_tick: f64 = (((tround1 as u128 * tround2 as u128) - (treply1 as u128 * treply2 as u128 )) / ((tround1 + treply1 + tround2 + treply2) as u128)) as f64;
+    let tof_sec: f64 = tof_tick * f;
 
     let distance = tof_sec * s_light;
-    if distance < 10000.0 { // protection contre les fausse valeures
+
+    // protection against wrong values
+    // e.g. One of the clocks ends its cycle during a measurement
+    if distance < 10000.0 { 
         sensor.distance = distance;
-    } else {
-        sensor.distance = sensor.distance;
     }
     
     Ok(sensor)
@@ -292,8 +287,8 @@ where
     CS: OutputPin,
 {
     let a: f64 = 0.96;
-    let distance_filtre: f64 = ((1.0 - a) * sensor.distance) + (a * sensor.previous_distance_filtre);
-    sensor.previous_distance_filtre = distance_filtre;
-    sensor.distance_filtre = distance_filtre;
+    let filtered_distance: f64 = ((1.0 - a) * sensor.distance) + (a * sensor.previous_filtered_distance);
+    sensor.previous_filtered_distance = filtered_distance;
+    sensor.filtered_distance = filtered_distance;
     Ok(sensor)
 }

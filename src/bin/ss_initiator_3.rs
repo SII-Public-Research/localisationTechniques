@@ -20,14 +20,13 @@ use localisationtechniques::{
 
 use chrono::prelude::*;
 
-
-
 // Returns current time HH:MM:SS
 async fn get_time() -> String {
     let local: DateTime<Local> = Local::now(); // e.g. `2014-11-28T21:45:59.324310806+09:00`
     let local = local.time().format("%H:%M:%S").to_string(); // format("%Y-%m-%dT%H:%M")
     local
 }
+
 
 #[tokio::main]
 async fn main() {

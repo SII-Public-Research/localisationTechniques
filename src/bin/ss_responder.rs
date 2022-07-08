@@ -16,7 +16,6 @@ use localisationtechniques::{
 
 use dw3000::hl::Ready;
 
-
 fn main() {
     let mut uwbsensor = init();
 
@@ -37,7 +36,6 @@ fn main() {
         };
     }
 }
-
 
 
 fn init() -> UWBSensor<Spi, OutputPin, Ready>

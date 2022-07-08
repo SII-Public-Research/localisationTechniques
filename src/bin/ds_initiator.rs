@@ -27,6 +27,7 @@ async fn get_time() -> String {
     local
 }
 
+
 #[tokio::main]
 async fn main() {
 
@@ -43,7 +44,7 @@ async fn main() {
     // A start measure is needed for initiatlise IIR filter
     uwbsensor = match rtt_ds_initiator(uwbsensor, OptionTimeout::Some(Timeout::new(500))).await {
         Ok(mut sensor1) => {
-            sensor1.previous_distance_filtre = sensor1.distance;
+            sensor1.previous_filtered_distance = sensor1.distance;
             sensor1
         }
         Err((_sensor1, _e)) => {
@@ -82,14 +83,14 @@ async fn main() {
 
             if uwbsensor.distance < 100_000.0 {
                 if nb_current_measure >= trash_measure {
-                    d1_mean += uwbsensor.distance_filtre;
+                    d1_mean += uwbsensor.filtered_distance;
                     nb_mean += 1.0;
                 }
                 nb_current_measure += 1;
                 let time = get_time().await;
                 let text = time + ";"
                     + &uwbsensor.distance.to_string() + ";"
-                    + &uwbsensor.distance_filtre.to_string() + ";\n";
+                    + &uwbsensor.filtered_distance.to_string() + ";\n";
 
                 write_to_experiment_file(&text, &mut file)
                     .expect("Failed to format the file for the experiment");
@@ -136,9 +137,3 @@ fn init() -> UWBSensor<Spi, OutputPin, Ready>
     println!("Init OK");
     uwbsensor
 }
-
-
-
-
-
-

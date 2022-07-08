@@ -21,12 +21,11 @@ where
     SPI: Transfer<u8> + Write<u8> + Send + 'static,
     CS: OutputPin + Send + 'static,
 {
-
     // SENDING FIRST MESSAGE
     println!("STEP 1 : Sending ping...");
 
     let buffer = [0; 25];
-    sensor = sensor.uwb_send(&buffer, None)?; // ???? gestion des erreur
+    sensor = sensor.uwb_send(&buffer, None)?;
 
 
     // RECEIVING T2 AND T3
@@ -38,16 +37,16 @@ where
         r_time: 0,
     };
 
-    sensor = sensor.uwb_receive(timeout, &mut uwb_data_r)?; // ???? gestion des erreur
-    sensor.timing_data[1] = uwb_data_r.data[0];     // Stocke T2
-    sensor.timing_data[2] = uwb_data_r.data[1];     // Stocke T3
-    sensor.timing_data[3] = uwb_data_r.r_time;      // Stocke T4
+    sensor = sensor.uwb_receive(timeout, &mut uwb_data_r)?;
+    sensor.timing_data[1] = uwb_data_r.data[0]; // T2
+    sensor.timing_data[2] = uwb_data_r.data[1]; // T3
+    sensor.timing_data[3] = uwb_data_r.r_time;  // T4
     
 
     // Distance calculation
     println!("STEP 3 : Distance calculation...");
 
-    sensor = calc_distance_simple(sensor)?;         // Calcule de la distance en m
+    sensor = calc_distance_simple(sensor)?; // Distance in meters
     Ok(sensor)
 }
 
@@ -69,8 +68,8 @@ where
         r_time: 0,
     };
 
-    sensor = sensor.uwb_receive(timeout, &mut uwb_data_r)?; // ???? gestion des erreur
-    sensor.timing_data[0] = uwb_data_r.r_time;   // T2
+    sensor = sensor.uwb_receive(timeout, &mut uwb_data_r)?;
+    sensor.timing_data[0] = uwb_data_r.r_time;  // T2
 
     // CALCULATE SENDING DELAY 
     let delay_rx_tx = sensor.timing_data[0] + (10000 * 63898) as u64;
@@ -81,7 +80,7 @@ where
     
     let mut buffer: [u8; 25] = [0; 25];
     convert_u64_u8(&sensor.timing_data, &mut buffer);
-    sensor = sensor.uwb_send(&buffer, Some(delay_rx_tx))?; // ???? gestion des erreur
+    sensor = sensor.uwb_send(&buffer, Some(delay_rx_tx))?;
 
     Ok(sensor)
 }

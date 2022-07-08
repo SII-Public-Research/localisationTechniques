@@ -121,7 +121,7 @@ where
     );
 
     println!("Distance = {}", sensor.distance);
-    println!("Filtered Distance = {}", sensor.distance_filtre);
+    println!("Filtered Distance = {}", sensor.filtered_distance);
 
     Ok(sensor)
 }
@@ -454,9 +454,9 @@ where
     println!("Anchor 2 - Row distance = {}", sensor2.distance);
     println!("Anchor 3 - Row distance = {}", sensor3.distance);
 
-    println!("Anchor 1 - Filtered distance = {}", sensor1.distance_filtre);
-    println!("Anchor 2 - Filtered distance = {}", sensor2.distance_filtre);
-    println!("Anchor 3 - Filtered distance = {}", sensor3.distance_filtre);
+    println!("Anchor 1 - Filtered distance = {}", sensor1.filtered_distance);
+    println!("Anchor 2 - Filtered distance = {}", sensor2.filtered_distance);
+    println!("Anchor 3 - Filtered distance = {}", sensor3.filtered_distance);
 
     Ok((sensor1, sensor2, sensor3,))
 }

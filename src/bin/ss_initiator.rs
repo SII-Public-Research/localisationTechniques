@@ -1,4 +1,3 @@
-
 use rppal::gpio::{Gpio, OutputPin};
 use rppal::spi::{Bus, Mode, SlaveSelect, Spi};
 
@@ -24,6 +23,7 @@ async fn get_time() -> String {
     let local = local.time().format("%H:%M:%S").to_string(); // format("%Y-%m-%dT%H:%M")
     local
 }
+
 
 #[tokio::main]
 async fn main()  {

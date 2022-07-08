@@ -20,7 +20,6 @@ use dw3000::hl::Ready;
 use std::thread;
 
 
-
 // Returns current time HH:MM:SS
 async fn get_time() -> String {
     let local: DateTime<Local> = Local::now(); // e.g. `2014-11-28T21:45:59.324310806+09:00`
@@ -46,9 +45,9 @@ async fn main() {
     (uwbsensor1, uwbsensor2, uwbsensor3) =
     match rtt_ds_initiator_3(uwbsensor1, uwbsensor2, uwbsensor3, OptionTimeout::Some(Timeout::new(500))).await {
         Ok((mut sensor1, mut sensor2, mut sensor3)) => {
-            sensor1.previous_distance_filtre = sensor1.distance;
-            sensor2.previous_distance_filtre = sensor2.distance;
-            sensor3.previous_distance_filtre = sensor3.distance;
+            sensor1.previous_filtered_distance = sensor1.distance;
+            sensor2.previous_filtered_distance = sensor2.distance;
+            sensor3.previous_filtered_distance = sensor3.distance;
             (sensor1, sensor2, sensor3)
         }
         Err((sensor1, sensor2, sensor3, _e)) => {
@@ -92,9 +91,9 @@ async fn main() {
 
             if uwbsensor1.distance < 100_000.0 && uwbsensor2.distance < 100_000.0 && uwbsensor3.distance <100_000.0 {
                 if nb_current_measure >= trash_measure {
-                    d1_mean += uwbsensor1.distance_filtre;
-                    d2_mean += uwbsensor2.distance_filtre;
-                    d3_mean += uwbsensor3.distance_filtre;
+                    d1_mean += uwbsensor1.filtered_distance;
+                    d2_mean += uwbsensor2.filtered_distance;
+                    d3_mean += uwbsensor3.filtered_distance;
                     nb_mean += 1.0;
                 }
                 nb_current_measure += 1;
@@ -103,9 +102,9 @@ async fn main() {
                     + &uwbsensor1.distance.to_string() + ";"
                     + &uwbsensor2.distance.to_string() + ";"
                     + &uwbsensor3.distance.to_string() + ";"
-                    + &uwbsensor1.distance_filtre.to_string() + ";"
-                    + &uwbsensor2.distance_filtre.to_string() + ";"
-                    + &uwbsensor3.distance_filtre.to_string() + ";\n";
+                    + &uwbsensor1.filtered_distance.to_string() + ";"
+                    + &uwbsensor2.filtered_distance.to_string() + ";"
+                    + &uwbsensor3.filtered_distance.to_string() + ";\n";
 
                 write_to_experiment_file(&text, &mut file)
                     .expect("Failed to format the file for the experiment");
@@ -170,6 +169,3 @@ fn init_3() -> (UWBSensor<Spi, OutputPin, Ready>, UWBSensor<Spi, OutputPin, Read
 
     return (uwbsensor1, uwbsensor2, uwbsensor3)
 }
-
-
-

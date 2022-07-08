@@ -1,3 +1,0 @@
-[alias]
-rb = "run --bin"
-rrb = "run --release --bin"

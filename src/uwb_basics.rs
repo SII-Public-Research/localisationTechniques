@@ -40,15 +40,15 @@ pub struct UwbRData {
 #[derive(Copy, Clone, Debug)]
 pub struct UWBSensor<SPI, CS, STATE> {
     pub dw3000: DW3000<SPI, CS, STATE>,
-    pub connection: bool,                       // indique si le anchor et la tag sont connectés
-    pub timing_data: [u64; 10],                 // stocke les temps envoyés
-    pub distance: f64,                          // stocke la distance en m
-    pub addr_dest: dw3000::mac::ShortAddress,   // stocke l'adresse du destinataire
-    pub id: u64,                                // stocke id du module UWB
-    pub ant_delay_tx: u64,                      // stocke le delai de l'antenne TX
-    pub error: u8,                              // stocke le type d'erreur
-    pub filtered_distance: f64,                 // stocke la valeur de la distance filtré en m (utilisé par le filtre IIR)          
-    pub previous_filtered_distance: f64,        // stocke la valeur de la distance précédente filtré en m (utilisé par le filtre IIR)
+    pub connection: bool,                       // indicates if the anchor and tag are connected
+    pub timing_data: [u64; 10],                 // store received timestamps
+    pub distance: f64,                          // store distance in meters
+    pub addr_dest: dw3000::mac::ShortAddress,   // store the receiver destinataire
+    pub id: u64,                                // store the id of the UWB module 
+    pub ant_delay_tx: u64,                      // store TX antenna delay
+    pub error: u8,                              // store error type
+    pub filtered_distance: f64,                 // store the filtered distance in m (used by IIR filter)          
+    pub previous_filtered_distance: f64,        // store the previous filtered distance in m (used by IIR filter)
 }
 
 
@@ -197,12 +197,14 @@ where
 }
 
 
+// calc_delay_send : Computes the timestamp when the response will be sent
 pub fn calc_delay_send <SPI, CS> (mut sensor: UWBSensor<SPI, CS, Ready>, delay: &mut u64) 
     -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)> 
 where
     SPI: Transfer<u8> + Write<u8>,
     CS: OutputPin,
 {
+    // delay = (reception_time + id * 50ms * clock_scale) % max_clcok_value
     *delay = (sensor.timing_data[1] + (sensor.id * 50000 * 63898)) % 1_0995_1162_7776 as u64;
     if sensor.id == 5 {
         sensor.timing_data[4] = ((*delay >> 9) << 9) + sensor.ant_delay_tx;
@@ -228,6 +230,7 @@ where
 }
 
 
+// calc_distance_simple : Compute the distance for simple_sided algorithm
 pub fn calc_distance_simple <SPI, CS> (mut sensor: UWBSensor<SPI, CS, Ready>) 
     -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)> 
 where
@@ -249,6 +252,7 @@ where
 }
 
 
+// calc_distance_double : Compute the distance for double_sided algorithm
 pub fn calc_distance_double <SPI, CS> (mut sensor: UWBSensor<SPI, CS, Ready>) 
     -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)> 
 where
@@ -278,15 +282,15 @@ where
 }
 
 
-// IIR filtre, to be used on the distances measured by UWBSensor
-pub fn filtre_iir<SPI, CS>(
+// iir_filter : to be used on the distances measured by UWBSensor
+pub fn iir_filter<SPI, CS>(
     mut sensor: UWBSensor<SPI, CS, Ready>,
 ) -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)>
 where
     SPI: Transfer<u8> + Write<u8>,
     CS: OutputPin,
 {
-    let a: f64 = 0.96;
+    let a: f64 = 0.96; // constraint coefficient: 0 no filter, 1 total restriction
     let filtered_distance: f64 = ((1.0 - a) * sensor.distance) + (a * sensor.previous_filtered_distance);
     sensor.previous_filtered_distance = filtered_distance;
     sensor.filtered_distance = filtered_distance;

@@ -1,3 +1,22 @@
+/*  
+	SIMPLE SIDED RTT MEASUREMENT TECHNIQUE :
+
+	INITIATOR	    RESPONDER
+        |               |
+	T1	|-----_____     |
+		|          ---->|   T2
+		|               |
+		|     _____-----|   T3
+	T4	|<----          |
+
+    Tround = T4 - T1
+    Treply = T3 - T2
+
+    TimeOfFlight = (Tround - Treply) / 2
+
+	/!\ A speed difference between the clocks exists, which impacts the measures. The use of the Double Sided is recommended /!\
+*/
+
 use crate::{
     error::Error,
     tools::*,
@@ -13,6 +32,8 @@ use embedded_hal::{
 
 use std::marker::Send;
 
+// rtt_ss_inititor : Simple Sided initiator algorithm.
+// To be used with rtt_ss_responder
 pub fn rtt_ss_inititor <SPI, CS>(
     mut sensor: UWBSensor<SPI, CS, Ready>,
     timeout: OptionTimeout,
@@ -51,6 +72,8 @@ where
 }
 
 
+// rtt_ss_responder : Simple Sided responder algorithm.
+// To be used with rtt_ss_initiator
 pub fn rtt_ss_responder <SPI, CS>(
     mut sensor: UWBSensor<SPI, CS, Ready>,
     timeout: OptionTimeout,

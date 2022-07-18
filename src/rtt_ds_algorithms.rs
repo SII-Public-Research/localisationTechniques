@@ -1,3 +1,25 @@
+/*  
+	DOUBLE SIDED RTT MEASUREMENT TECHNIQUE :
+
+	INITIATOR	    RESPONDER
+        |               |
+	T1	|-----_____     |
+		|          ---->|   T2
+		|               |
+		|     _____-----|   T3
+	T4	|<----          |
+        |               |
+	T5	|-----_____     |
+		|          ---->|   T6
+
+    Tround1 = T4 - T1
+    Tround2 = T6 - T3
+    Treply1 = T3 - T2
+    Treply2 = T5 - T4
+
+    TimeOfFlight = (Tround1 * Tround2 - Treply1 * Treply2) / (Tround1 + Tround2 + Treply1 + Treply2)
+*/
+
 use crate::{
     ok_or_panic,
     error::Error,
@@ -19,6 +41,9 @@ use std::{
     marker::Send,
 };
 
+
+// rtt_ds_initiator : Double Sided initiator.
+// To be used with rtt_ds_responder
 pub async fn rtt_ds_initiator<SPI, CS>(
     mut sensor: UWBSensor<SPI, CS, Ready>,
     timeout: OptionTimeout,
@@ -116,7 +141,7 @@ where
         "Distance calculation failed",
     );
     sensor = ok_or_panic(
-        filtre_iir(sensor),
+        iir_filter(sensor),
         "Filter failed",
     );
 
@@ -427,7 +452,7 @@ where
         "Distance calculations anchor 1 failed",
     );
     sensor1 = ok_or_panic(
-        filtre_iir(sensor1),
+        iir_filter(sensor1),
         " Distance filter anchor 01 failed",
     );
 
@@ -436,7 +461,7 @@ where
         "Distance calculations anchor 2 failed",
     );
     sensor2 = ok_or_panic(
-        filtre_iir(sensor2),
+        iir_filter(sensor2),
         " Distance filter anchor 01 failed",
     );
     
@@ -446,7 +471,7 @@ where
         "Distance calculations anchor 3 failed",
     );
     sensor3 = ok_or_panic(
-        filtre_iir(sensor3),
+        iir_filter(sensor3),
         " Distance filter anchor 01 failed",
     );
 

@@ -12,6 +12,7 @@ use embedded_hal::{
     timer::CountDown,
 };
 use embedded_timeout_macros::block_timeout;
+// use rppal::gpio::OutputPin as rppalPin;
 
 
 // PanId : Personal Area Network Identifier, all modules are on the same network
@@ -205,7 +206,7 @@ where
     CS: OutputPin,
 {
     // delay = (reception_time + id * 50ms * clock_scale) % max_clcok_value
-    *delay = (sensor.timing_data[1] + (sensor.id * 50000 * 63898)) % 1_0995_1162_7776 as u64;
+    *delay = (sensor.timing_data[1] + (sensor.id * 100_000 * 63898)) % 1_0995_1162_7776 as u64;
     if sensor.id == 5 {
         sensor.timing_data[4] = ((*delay >> 9) << 9) + sensor.ant_delay_tx;
     } else {
@@ -216,7 +217,7 @@ where
 } 
 
 
-pub fn send_erreur<SPI,CS>(mut sensor:UWBSensor<SPI,CS,Ready>)
+pub fn send_erreur<SPI,CS>(mut sensor:UWBSensor<SPI, CS, Ready>)
  -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)> 
 where
     SPI: Transfer<u8> + Write<u8>,

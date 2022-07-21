@@ -17,6 +17,12 @@ impl Timeout
             count: Duration::from_millis(count),
         }
     }
+    pub fn new_nanos(count: u64) -> Self {
+        Timeout {
+            timer: Timer::new(),
+            count: Duration::from_nanos(count),
+        }
+    }
 }
 #[derive(Copy, Clone, Debug)]
 pub enum OptionTimeout

@@ -24,7 +24,8 @@ use crate::{
     ok_or_panic,
     error::Error,
     tools::*,
-    uwb_basics::*
+    uwb_basics::*,
+    sync::RpiSync,
 };
 
 use dw3000::hl::Ready;
@@ -40,7 +41,6 @@ use std::{
     thread,
     marker::Send,
 };
-
 
 // rtt_ds_initiator : Double Sided initiator.
 // To be used with rtt_ds_responder
@@ -240,6 +240,7 @@ pub async fn rtt_ds_initiator_3<SPI, CS>(
     sensor2: UWBSensor<SPI, CS, Ready>, 
     sensor3: UWBSensor<SPI, CS, Ready>,
     timeout: OptionTimeout,
+    sync: &mut RpiSync,
 ) -> Result<
     (UWBSensor<SPI, CS, Ready>, UWBSensor<SPI, CS, Ready>, UWBSensor<SPI, CS, Ready>),
     (UWBSensor<SPI, CS, Ready>, UWBSensor<SPI, CS, Ready>, UWBSensor<SPI, CS, Ready>,
@@ -264,10 +265,16 @@ where
         r_time: 0,
     };
 
+    /* SYNC */
+    match sync.sync() {
+        Err(err) => { return Err((sensor1, sensor2, sensor3, err)) },
+        _ => (),
+    }
+    
+
 
     println!("STEP 1 : Sending first ping...");
     sensor1 = ok_or_panic(sensor1.uwb_send(&[0], None), "fail");
-
 
     /****************************************************/
     /* Asynchronous blocking reception on the 3 modules */
@@ -334,6 +341,8 @@ where
     let mut sensor1 = blocking_task1.await.unwrap();
     let mut sensor2 = blocking_task2.await.unwrap();
     let mut sensor3 = blocking_task3.await.unwrap();
+
+    println!("Temps d'arrivées: [1] {:?} ; [2] {:?} ; [3] {:?}", sensor1.timing_data.clone(), sensor2.timing_data, sensor3.timing_data);
 
     if sensor1.timing_data[1] == 0 || sensor2.timing_data[1] == 0 || sensor3.timing_data[1] == 0 {
         sensor1.error=0;

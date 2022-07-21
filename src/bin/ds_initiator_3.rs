@@ -19,6 +19,8 @@ use dw3000::hl::Ready;
 
 use std::thread;
 
+use localisationtechniques::sync::RpiSync;
+
 
 // Returns current time HH:MM:SS
 async fn get_time() -> String {
@@ -33,17 +35,20 @@ async fn main() {
 
     // Creates and prepare csv to export data
     println!("Creating file for the experimentation");
-    let mut file = create_experiment_file()
+    let mut file = create_experiment_file() //il faut un dossier dataset sinon ca plante instant'  
         .expect("Failed to create the file for the experiment");
     write_to_experiment_file("Time; D1 row; D2 row; D3 row; D1 filtered; D2 filtered; D3 filtered;\n", &mut file)
         .expect("Failed to format the file for the experiment");
     println!("File is created and ready for the experimentation");
 
-    let (mut uwbsensor1, mut uwbsensor2, mut uwbsensor3) = init_3();
+    let (mut uwbsensor1, 
+        mut uwbsensor2, 
+        mut uwbsensor3,
+        mut sync) = init_3();
 
     // A start measure is needed for initiatlise IIR filter
     (uwbsensor1, uwbsensor2, uwbsensor3) =
-    match rtt_ds_initiator_3(uwbsensor1, uwbsensor2, uwbsensor3, OptionTimeout::Some(Timeout::new(500))).await {
+    match rtt_ds_initiator_3(uwbsensor1, uwbsensor2, uwbsensor3, OptionTimeout::Some(Timeout::new(500)), &mut sync).await {
         Ok((mut sensor1, mut sensor2, mut sensor3)) => {
             sensor1.previous_filtered_distance = sensor1.distance;
             sensor2.previous_filtered_distance = sensor2.distance;
@@ -73,7 +78,7 @@ async fn main() {
 
         while nb_current_measure < nb_measure {
             println!("\nNew measure");
-            (uwbsensor1, uwbsensor2, uwbsensor3) = match rtt_ds_initiator_3(uwbsensor1, uwbsensor2, uwbsensor3, OptionTimeout::Some(Timeout::new(500))).await {
+            (uwbsensor1, uwbsensor2, uwbsensor3) = match rtt_ds_initiator_3(uwbsensor1, uwbsensor2, uwbsensor3, OptionTimeout::Some(Timeout::new(500)), &mut sync).await {
                 Ok(sensors) => {
                     println!("OK");
                     io::stdout().flush().unwrap();
@@ -122,7 +127,7 @@ async fn main() {
 }
 
 
-fn init_3() -> (UWBSensor<Spi, OutputPin, Ready>, UWBSensor<Spi, OutputPin, Ready>, UWBSensor<Spi, OutputPin, Ready>)
+fn init_3() -> (UWBSensor<Spi, OutputPin, Ready>, UWBSensor<Spi, OutputPin, Ready>, UWBSensor<Spi, OutputPin, Ready>, RpiSync)
 {
     /******************************************************* */
 	/************        BASIC CONFIGURATION      ********** */
@@ -165,7 +170,12 @@ fn init_3() -> (UWBSensor<Spi, OutputPin, Ready>, UWBSensor<Spi, OutputPin, Read
     uwbsensor2.dw3000.set_address(PAN_ID, ADD_S_ANCH2).expect("Erreur set adress");
     uwbsensor3.dw3000.set_address(PAN_ID, ADD_S_ANCH3).expect("Erreur set adress");
 
+    // SYNC
+    let gpio_sync = gpio.get(24).unwrap().into_output();
+    let sync = RpiSync::new(gpio_sync);
+
+
     println!("Init OK");
 
-    return (uwbsensor1, uwbsensor2, uwbsensor3)
+    return (uwbsensor1, uwbsensor2, uwbsensor3, sync)
 }

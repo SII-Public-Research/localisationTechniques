@@ -10,7 +10,7 @@ pub fn create_experiment_file() -> Result<File, Box<dyn Error>> {
     let local: DateTime<Local> = Local::now(); // e.g. `2014-11-28T21:45:59.324310806+09:00`
     let local = local.format("%Y-%m-%dT%Hh%M").to_string(); // you cant put a char ':' in this path string, OK CHEF !!
                                                             // otherwise you cant pull the git on windows
-    let local = "dataset/".to_string() + &local;
+    let local = "dataset/".to_string() + &local; //il faut un dossier dataset sinon ca plante instant'  
     let file = File::create(local)?;
     Ok(file)
 }

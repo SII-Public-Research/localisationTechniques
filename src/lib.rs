@@ -1,10 +1,12 @@
+#![allow(clippy::type_complexity)]
+
 pub mod error;
 pub mod experiment_file;
-pub mod uwb_basics;
-pub mod rtt_ss_algorithms;
 pub mod rtt_ds_algorithms;
-pub mod tools;
+pub mod rtt_ss_algorithms;
 pub mod sync;
+pub mod tools;
+pub mod uwb_basics;
 
 pub fn ok_or_panic<T, E>(result: Result<T, E>, panic_info: &str) -> T {
     match result {

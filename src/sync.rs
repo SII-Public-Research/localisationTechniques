@@ -1,7 +1,7 @@
 use dw3000::block;
+use embedded_hal::timer::CountDown;
 use rppal::{gpio::OutputPin as rppalPin, hal::Timer};
 use std::time::Duration;
-use embedded_hal::timer::CountDown;
 
 #[derive(Debug)]
 pub struct RpiSync {
@@ -9,12 +9,11 @@ pub struct RpiSync {
     timer: Timer,
 }
 
-impl RpiSync
-{
+impl RpiSync {
     pub fn new(gpio: rppalPin) -> Self {
-        Self { 
+        Self {
             gpio,
-            timer: Timer::new(),     
+            timer: Timer::new(),
         }
     }
 

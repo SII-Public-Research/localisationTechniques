@@ -1,4 +1,3 @@
-
 use rppal::gpio::{Gpio, OutputPin};
 use rppal::hal::Timer;
 use rppal::spi::{Bus, Mode, SlaveSelect, Spi};
@@ -10,12 +9,7 @@ use std::time::Duration;
 use dw3000::hl::Ready;
 
 use localisationtechniques::{
-    rtt_ss_algorithms::*,
-    uwb_basics::*,
-    tools::*,
-    experiment_file::*,
-    ok_or_panic,
-    scanf,
+    experiment_file::*, ok_or_panic, rtt_ss_algorithms::*, scanf, tools::*, uwb_basics::*,
 };
 
 use chrono::prelude::*;
@@ -27,32 +21,30 @@ async fn get_time() -> String {
     local
 }
 
-
 #[tokio::main]
 async fn main() {
     // Creates and prepare csv to export data
     println!("Creating file for the experimentation");
-    let mut file = create_experiment_file()
-        .expect("Failed to create the file for the experiment");
+    let mut file = create_experiment_file().expect("Failed to create the file for the experiment");
     write_to_experiment_file("Time; D1 row; D2 row; D3 row;\n", &mut file)
         .expect("Failed to format the file for the experiment");
     println!("File is created and ready for the experimentation");
- 
-    
+
     let (mut uwbsensor1, mut uwbsensor2, mut uwbsensor3) = init_3();
     loop {
-        let _timer = Timer::new();
         let nb_measure: u32;
         let mut nb_current_measure = 0;
 
-        scanf!(nb_measure,
+        scanf!(
+            nb_measure,
             "How many measure are needed ? : ",
             "Invalid number, try again : "
         );
-              
+
         while nb_current_measure < nb_measure {
             println!("\nNew measure");
-            uwbsensor1 = match rtt_ss_inititor(uwbsensor1, OptionTimeout::Some(Timeout::new(500))) {
+            uwbsensor1 = match rtt_ss_initiator(uwbsensor1, OptionTimeout::Some(Timeout::new(500)))
+            {
                 Ok(sensor) => {
                     println!("OK");
                     println!("Distance 1 = {}", sensor.distance);
@@ -68,7 +60,8 @@ async fn main() {
             };
             thread::sleep(Duration::from_millis(25));
 
-            uwbsensor2 = match rtt_ss_inititor(uwbsensor2, OptionTimeout::Some(Timeout::new(500))) {
+            uwbsensor2 = match rtt_ss_initiator(uwbsensor2, OptionTimeout::Some(Timeout::new(500)))
+            {
                 Ok(sensor) => {
                     println!("OK");
                     println!("Distance 2 = {}", sensor.distance);
@@ -84,7 +77,8 @@ async fn main() {
             };
             thread::sleep(Duration::from_millis(25));
 
-            uwbsensor3 = match rtt_ss_inititor(uwbsensor3,OptionTimeout::Some(Timeout::new(500))) {
+            uwbsensor3 = match rtt_ss_initiator(uwbsensor3, OptionTimeout::Some(Timeout::new(500)))
+            {
                 Ok(sensor) => {
                     println!("OK");
                     println!("Distance 3= {}", sensor.distance);
@@ -99,15 +93,21 @@ async fn main() {
                 }
             };
 
-
-            if uwbsensor1.distance < 100_000.0 && uwbsensor3.distance < 100_000.0 && uwbsensor2.distance < 100_000.0 {
+            if uwbsensor1.distance < 100_000.0
+                && uwbsensor3.distance < 100_000.0
+                && uwbsensor2.distance < 100_000.0
+            {
                 nb_current_measure += 1;
                 let time = get_time().await; // on récupère l'heure actuelle
-                let texte = time + ";"
-                    + &uwbsensor1.distance.to_string() + ";"
-                    + &uwbsensor2.distance.to_string() + ";"
-                    + &uwbsensor3.distance.to_string() + ";\n";
-                    
+                let texte = time
+                    + ";"
+                    + &uwbsensor1.distance.to_string()
+                    + ";"
+                    + &uwbsensor2.distance.to_string()
+                    + ";"
+                    + &uwbsensor3.distance.to_string()
+                    + ";\n";
+
                 write_to_experiment_file(&texte, &mut file)
                     .expect("Failed to format the file for the experiment");
             }
@@ -116,18 +116,20 @@ async fn main() {
     }
 }
 
-
-fn init_3() -> (UWBSensor<Spi, OutputPin, Ready>, UWBSensor<Spi, OutputPin, Ready>, UWBSensor<Spi, OutputPin, Ready>)
-{
+fn init_3() -> (
+    UWBSensor<Spi, OutputPin, Ready>,
+    UWBSensor<Spi, OutputPin, Ready>,
+    UWBSensor<Spi, OutputPin, Ready>,
+) {
     /******************************************************* */
-	/************        BASIC CONFIGURATION      ********** */
-	/******************************************************* */
+    /************        BASIC CONFIGURATION      ********** */
+    /******************************************************* */
     let spi1 = Spi::new(Bus::Spi1, SlaveSelect::Ss0, 4_500_000, Mode::Mode0).unwrap();
     let spi2 = Spi::new(Bus::Spi1, SlaveSelect::Ss1, 4_500_000, Mode::Mode0).unwrap();
     let spi3 = Spi::new(Bus::Spi1, SlaveSelect::Ss2, 4_500_000, Mode::Mode0).unwrap();
-    
+
     /* /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\  */
-	/* An unknown problem, for the moment, forces us to select 3 different CS from the default ones to make it work */
+    /* An unknown problem, for the moment, forces us to select 3 different CS from the default ones to make it work */
     /* /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\  */
     let gpio = Gpio::new().unwrap();
     let cs0 = gpio.get(23).unwrap().into_output();
@@ -135,8 +137,8 @@ fn init_3() -> (UWBSensor<Spi, OutputPin, Ready>, UWBSensor<Spi, OutputPin, Read
     let cs2 = gpio.get(22).unwrap().into_output();
 
     /****************************************************** */
-	/*****                DW3000 RESET              ******* */
-	/****************************************************** */
+    /*****                DW3000 RESET              ******* */
+    /****************************************************** */
 
     let mut reset = gpio
         .get(4)
@@ -148,19 +150,37 @@ fn init_3() -> (UWBSensor<Spi, OutputPin, Ready>, UWBSensor<Spi, OutputPin, Read
     thread::sleep(Duration::from_millis(500));
 
     // create an UWBSensor
-    let mut uwbsensor1 = ok_or_panic(UWBSensor::new(spi1, cs0),"Failed to create an UWBSensor object");
-    let mut uwbsensor2 = ok_or_panic(UWBSensor::new(spi2, cs1),"Failed to create an UWBSensor object");
-    let mut uwbsensor3 = ok_or_panic(UWBSensor::new(spi3, cs2),"Failed to create an UWBSensor object");
+    let mut uwbsensor1 = ok_or_panic(
+        UWBSensor::new(spi1, cs0),
+        "Failed to create an UWBSensor object",
+    );
+    let mut uwbsensor2 = ok_or_panic(
+        UWBSensor::new(spi2, cs1),
+        "Failed to create an UWBSensor object",
+    );
+    let mut uwbsensor3 = ok_or_panic(
+        UWBSensor::new(spi3, cs2),
+        "Failed to create an UWBSensor object",
+    );
 
     uwbsensor1.id = 1;
     uwbsensor2.id = 2;
     uwbsensor3.id = 3;
 
-    uwbsensor1.dw3000.set_address(PAN_ID, ADD_S_ANCH1).expect("Erreur set adress");
-    uwbsensor2.dw3000.set_address(PAN_ID, ADD_S_ANCH2).expect("Erreur set adress");
-    uwbsensor3.dw3000.set_address(PAN_ID, ADD_S_ANCH3).expect("Erreur set adress");
+    uwbsensor1
+        .dw3000
+        .set_address(PAN_ID, ADD_S_ANCH1)
+        .expect("Erreur set adress");
+    uwbsensor2
+        .dw3000
+        .set_address(PAN_ID, ADD_S_ANCH2)
+        .expect("Erreur set adress");
+    uwbsensor3
+        .dw3000
+        .set_address(PAN_ID, ADD_S_ANCH3)
+        .expect("Erreur set adress");
 
     println!("Init OK");
 
-    return (uwbsensor1, uwbsensor2, uwbsensor3)
+    return (uwbsensor1, uwbsensor2, uwbsensor3);
 }

@@ -7,12 +7,7 @@ use std::time::Duration;
 
 use dw3000::hl::Ready;
 use localisationtechniques::{
-    rtt_ss_algorithms::*,
-    uwb_basics::*,
-    tools::*,
-    experiment_file::*,
-    ok_or_panic,
-    scanf,
+    experiment_file::*, ok_or_panic, rtt_ss_algorithms::*, scanf, tools::*, uwb_basics::*,
 };
 
 use chrono::*;
@@ -24,32 +19,30 @@ async fn get_time() -> String {
     local
 }
 
-
 #[tokio::main]
-async fn main()  {
-
+async fn main() {
     // Creates and prepare csv to export data
     println!("Creating file for the experimentation");
-    let mut file = create_experiment_file()
-        .expect("Failed to create the file for the experiment");
+    let mut file = create_experiment_file().expect("Failed to create the file for the experiment");
     write_to_experiment_file("Time; D1 row;\n", &mut file)
         .expect("Failed to format the file for the experiment");
     println!("File is created and ready for the experimentation");
-    
+
     let mut uwbsensor = init();
 
     loop {
         let nb_measure: u32;
         let mut nb_current_measure = 0;
 
-        scanf!(nb_measure,
+        scanf!(
+            nb_measure,
             "How many measure are needed ? : ",
             "Invalid number, try again : "
         );
 
         while nb_current_measure < nb_measure {
             println!("\nNew measure");
-            uwbsensor = match rtt_ss_inititor(uwbsensor, OptionTimeout::Some(Timeout::new(500))) {
+            uwbsensor = match rtt_ss_initiator(uwbsensor, OptionTimeout::Some(Timeout::new(500))) {
                 Ok(sensor) => {
                     println!("OK");
                     println!("Distance = {}", sensor.distance);
@@ -66,9 +59,8 @@ async fn main()  {
 
             if uwbsensor.distance < 100_000.0 {
                 nb_current_measure += 1;
-                let time = get_time().await; 
-                let texte = time + ";"
-                    + &uwbsensor.distance.to_string() + ";\n";
+                let time = get_time().await;
+                let texte = time + ";" + &uwbsensor.distance.to_string() + ";\n";
 
                 write_to_experiment_file(&texte, &mut file)
                     .expect("Failed to format the file for the experiment");
@@ -78,22 +70,19 @@ async fn main()  {
     }
 }
 
-
-fn init() -> UWBSensor<Spi, OutputPin, Ready>
-{ 
+fn init() -> UWBSensor<Spi, OutputPin, Ready> {
     /******************************************************* */
-	/************        BASIC CONFIGURATION      ********** */
-	/******************************************************* */
+    /************        BASIC CONFIGURATION      ********** */
+    /******************************************************* */
 
     let spi = Spi::new(Bus::Spi1, SlaveSelect::Ss0, 500_000, Mode::Mode0)
         .expect("Failed to configure the spi");
-    let gpio = Gpio::new()
-        .expect("Failed to configure GPIO");
-    let cs= gpio.get(16).unwrap().into_output();
+    let gpio = Gpio::new().expect("Failed to configure GPIO");
+    let cs = gpio.get(16).unwrap().into_output();
 
     /****************************************************** */
-	/*****                DW3000 RESET              ******* */
-	/****************************************************** */
+    /*****                DW3000 RESET              ******* */
+    /****************************************************** */
 
     let mut reset = gpio
         .get(4)
@@ -103,14 +92,14 @@ fn init() -> UWBSensor<Spi, OutputPin, Ready>
     reset.set_high();
 
     /****************************************************** */
-	/*********        UWBsensor CONFIGURATION      ******** */
-	/****************************************************** */
+    /*********        UWBsensor CONFIGURATION      ******** */
+    /****************************************************** */
 
     let uwbsensor = ok_or_panic(
         UWBSensor::new(spi, cs),
         "Failed to create an UWBSensor object",
     );
     println!("Init OK");
-    
+
     uwbsensor
 }

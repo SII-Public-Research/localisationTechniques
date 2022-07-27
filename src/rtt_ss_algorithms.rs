@@ -28,9 +28,9 @@ use embedded_hal::{
 
 use std::marker::Send;
 
-// rtt_ss_inititor : Simple Sided initiator algorithm.
+// rtt_ss_initiator : Simple Sided initiator algorithm.
 // To be used with rtt_ss_responder
-pub fn rtt_ss_inititor<SPI, CS>(
+pub fn rtt_ss_initiator<SPI, CS>(
     mut sensor: UWBSensor<SPI, CS, Ready>,
     timeout: OptionTimeout,
 ) -> Result<UWBSensor<SPI, CS, Ready>, (UWBSensor<SPI, CS, Ready>, Error<SPI, CS>)>

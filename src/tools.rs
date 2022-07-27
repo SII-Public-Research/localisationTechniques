@@ -40,12 +40,12 @@ pub fn convert_u8_u64(u8_array: &[u8], nb_data: usize) -> u64 {
 
 // // convert u64 to [u8], used with receive and send and receive
 pub fn convert_u64_u8(u64time: &[u64], u8_array: &mut [u8; 25]) {
-    for (i, _) in u64time.iter().enumerate().take(5) {
+    for (i, &time_i) in u64time.iter().enumerate() {
         let j = i * 5;
-        u8_array[j] = (u64time[i] >> (8 * 4)) as u8;
-        u8_array[j + 1] = (u64time[i] >> (8 * 3)) as u8;
-        u8_array[j + 2] = (u64time[i] >> (8 * 2)) as u8;
-        u8_array[j + 3] = (u64time[i] >> (8)) as u8;
-        u8_array[j + 4] = u64time[i] as u8;
+        u8_array[j] = (time_i >> (8 * 4)) as u8;
+        u8_array[j + 1] = (time_i >> (8 * 3)) as u8;
+        u8_array[j + 2] = (time_i >> (8 * 2)) as u8;
+        u8_array[j + 3] = (time_i >> (8)) as u8;
+        u8_array[j + 4] = time_i as u8;
     }
 }

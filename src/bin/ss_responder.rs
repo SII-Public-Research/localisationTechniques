@@ -2,17 +2,12 @@ use rppal::gpio::{Gpio, OutputPin};
 use rppal::spi::{Bus, Mode, SlaveSelect, Spi};
 
 use std::{
-    time::Duration,
-    thread,
     io::{self, Write},
+    thread,
+    time::Duration,
 };
 
-use localisationtechniques::{
-    rtt_ss_algorithms::*,
-    uwb_basics::*,
-    tools::*,
-    ok_or_panic,
-};
+use localisationtechniques::{ok_or_panic, rtt_ss_algorithms::*, tools::*, uwb_basics::*};
 
 use dw3000::hl::Ready;
 
@@ -37,20 +32,17 @@ fn main() {
     }
 }
 
-
-fn init() -> UWBSensor<Spi, OutputPin, Ready>
-{
-
+fn init() -> UWBSensor<Spi, OutputPin, Ready> {
     /******************************************************* */
-	/************        BASIC CONFIGURATION      ********** */
-	/******************************************************* */
+    /************        BASIC CONFIGURATION      ********** */
+    /******************************************************* */
     let spi = Spi::new(Bus::Spi1, SlaveSelect::Ss0, 4_500_000, Mode::Mode0).unwrap();
     let gpio = Gpio::new().unwrap();
     let cs = gpio.get(16).unwrap().into_output();
 
     /****************************************************** */
-	/*****                DW3000 RESET              ******* */
-	/****************************************************** */
+    /*****                DW3000 RESET              ******* */
+    /****************************************************** */
 
     let mut reset = gpio
         .get(4)
@@ -62,9 +54,15 @@ fn init() -> UWBSensor<Spi, OutputPin, Ready>
     thread::sleep(Duration::from_millis(500));
 
     // create an UWBSensor
-    let mut uwbsensor = ok_or_panic(UWBSensor::new(spi, cs),"Failed to create an UWBSensor object");
+    let mut uwbsensor = ok_or_panic(
+        UWBSensor::new(spi, cs),
+        "Failed to create an UWBSensor object",
+    );
     uwbsensor.id = 1;
-    uwbsensor.dw3000.set_address(PAN_ID, ADD_S_ANCH1).expect("Erreur set adress");
+    uwbsensor
+        .dw3000
+        .set_address(PAN_ID, ADD_S_ANCH1)
+        .expect("Erreur set adress");
 
     println!("Init OK");
     uwbsensor
